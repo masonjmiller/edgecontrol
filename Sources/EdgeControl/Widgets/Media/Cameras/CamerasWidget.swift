@@ -16,9 +16,9 @@ public final class CamerasWidget: DashboardWidget {
         ConfigSchemaEntry(
             key: CamerasSettings.serverKey, label: "go2rtc Server", type: .text, defaultValue: .string(""),
             help: "Your go2rtc address, like 192.168.1.20:1984. Frigate and Home Assistant include go2rtc."),
+        // No help line: the list says itself what an empty list shows.
         ConfigSchemaEntry(
-            key: CamerasSettings.camerasKey, label: "Cameras", type: .cameraList, defaultValue: .stringArray([]),
-            help: "Leave empty to show every camera on the server."),
+            key: CamerasSettings.camerasKey, label: "Cameras", type: .cameraList, defaultValue: .stringArray([])),
         ConfigSchemaEntry(
             key: "layout", label: "Show", type: .picker, defaultValue: .string("single"),
             options: ["single", "grid"],
