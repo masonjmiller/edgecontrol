@@ -157,7 +157,7 @@ struct GuideView: View {
                             ),
                             (
                                 "Picture",
-                                "Once the widget is five columns wide: the live view of P1 and A1 printers, or the model as the slicer drew it, solid up to the layer printing now."
+                                "Once the widget is five columns wide: the live view of P1 and A1 printers, or the model as the slicer drew it, filling in as the print progresses."
                             ),
                             ("Spools", "Each AMS slot in its filament's color; the ring marks the one printing."),
                         ])

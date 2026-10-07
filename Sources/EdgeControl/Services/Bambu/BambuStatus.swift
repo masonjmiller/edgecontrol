@@ -91,17 +91,16 @@ public struct BambuStatus: Equatable, Sendable {
 
     public var isActive: Bool { [.preparing, .printing, .paused].contains(state) }
 
-    /// How much of the model is printed, 0…1: by layer when the printer
-    /// counts them, since a percentage includes heating and levelling.
+    /// How much of the model to draw as printed, 0…1: the same percentage
+    /// as the progress bar. Layers would be truer to height, but the picture
+    /// is drawn at an angle, so a flat part fills most of its height, and a
+    /// print with a wide base and a thin top spends most of its time in the
+    /// first layers. A shelf at 63% on layer 14 of 122 would look barely begun.
     public var printedFraction: Double {
         switch state {
-        case .finished:
-            return 1
-        case .printing, .paused, .failed:
-            if let layer, let totalLayers { return min(1, Double(layer) / Double(totalLayers)) }
-            return Double(progress) / 100
-        default:
-            return 0
+        case .finished: return 1
+        case .printing, .paused, .failed: return Double(progress) / 100
+        default: return 0
         }
     }
 

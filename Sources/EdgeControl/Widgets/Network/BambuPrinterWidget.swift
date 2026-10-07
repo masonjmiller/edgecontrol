@@ -21,7 +21,7 @@ public final class BambuPrinterWidget: DashboardWidget {
             key: "picture", label: "Picture", type: .picker, defaultValue: .string("camera"),
             options: BambuPicture.allCases.map(\.rawValue),
             help:
-                "Beside the print once the widget is five columns wide: the live view of P1 and A1 printers, or the model as the slicer drew it, filling in as layers print."
+                "Beside the print once the widget is five columns wide: the live view of P1 and A1 printers, or the model as the slicer drew it, filling in as the print progresses."
         ),
     ]
     /// The progress bar and the active spool's ring.
@@ -178,7 +178,7 @@ private struct BambuPrinterView: View {
     }
 
     /// The plate as the slicer drew it: faint where it hasn't printed yet,
-    /// solid up to the current layer. Dark filament is lifted to grey, or a
+    /// solid as far as the print has got. Dark filament is lifted to grey, or a
     /// black print would vanish into the dashboard.
     private func modelPicture(_ preview: BambuModelPreview, _ status: BambuStatus) -> some View {
         let shape = RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous)

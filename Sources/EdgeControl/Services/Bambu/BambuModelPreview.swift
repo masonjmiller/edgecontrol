@@ -8,7 +8,7 @@ import ImageIO
 public struct BambuModelPreview: @unchecked Sendable {
     public let image: CGImage
     /// Where the model sits in the picture, as fractions of its size from the
-    /// top left. The widget fills this in from the bottom as layers print.
+    /// top left. The widget fills this in from the bottom as the print goes.
     public let modelBounds: CGRect
     /// Black or dark grey filament, which would vanish on a dark dashboard.
     public let isDark: Bool

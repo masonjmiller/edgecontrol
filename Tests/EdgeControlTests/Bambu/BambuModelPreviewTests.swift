@@ -179,11 +179,11 @@ struct BambuModelPreviewTests {
         #expect(BambuPreviewSession.paths(forJobFile: file) == paths)
     }
 
-    @Test("printed fraction follows layers, not the percentage")
+    @Test("the model fills in with the progress bar's percentage, not by layer")
     func printedFraction() throws {
         let printing = BambuStatus(
-            try bambuJSON(#"{"gcode_state":"RUNNING","mc_percent":20,"layer_num":30,"total_layer_num":120}"#))
-        #expect(printing.printedFraction == 0.25)
+            try bambuJSON(#"{"gcode_state":"RUNNING","mc_percent":63,"layer_num":14,"total_layer_num":122}"#))
+        #expect(printing.printedFraction == 0.63)
         #expect(BambuStatus(try bambuJSON(#"{"gcode_state":"FINISH"}"#)).printedFraction == 1)
         #expect(BambuStatus(try bambuJSON(#"{"gcode_state":"PREPARE","mc_percent":3}"#)).printedFraction == 0)
         #expect(BambuStatus(try bambuJSON(#"{"gcode_state":"RUNNING","mc_percent":40}"#)).printedFraction == 0.4)
