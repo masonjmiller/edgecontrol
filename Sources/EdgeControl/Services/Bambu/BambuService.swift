@@ -49,11 +49,22 @@ public final class BambuService: ObservableObject {
     @Published public private(set) var frames: [String: BambuCameraFrame] = [:]
     /// The current job's plate picture, for widgets showing the model.
     @Published public private(set) var previews: [String: BambuModelPreview] = [:]
+    /// What the last search of the network found, for settings to offer.
+    @Published public private(set) var discovered: [BambuDiscovery.Found]?
+    @Published public private(set) var discovering = false
+    /// Printers found at a new address after going quiet at the old one:
+    /// old address → new. Widgets showing the old address save the new one.
+    @Published public private(set) var moves: [String: String] = [:]
 
     private let secrets: CISecretStore
     private let makeReportLink: ReportLinkFactory
     private let makeCameraLink: CameraLinkFactory
     private let makePreviewLink: PreviewLinkFactory
+    private let scan: @Sendable () async -> [BambuDiscovery.Found]
+    /// Serial numbers known for each address, from a widget's settings or a
+    /// connection, so a printer that moves can be recognised.
+    private var serials: [String: String] = [:]
+    private var lastLocated: [String: Date] = [:]
     private let retryDelays: [Duration]
 
     private var reports: [String: BambuJSON] = [:]
@@ -84,13 +95,16 @@ public final class BambuService: ObservableObject {
             retryDelays: [.seconds(2), .seconds(5), .seconds(15), .seconds(30), .seconds(60)],
             makeReportLink: { BambuMQTTSession(host: $0, accessCode: $1, handler: $2) },
             makeCameraLink: { BambuCameraSession(host: $0, accessCode: $1, handler: $2) },
-            makePreviewLink: { BambuPreviewSession(host: $0, accessCode: $1, paths: $2, handler: $3) })
+            makePreviewLink: { BambuPreviewSession(host: $0, accessCode: $1, paths: $2, handler: $3) },
+            scan: { await BambuDiscovery.scan() })
     }
 
     init(
         secrets: CISecretStore, retryDelays: [Duration], makeReportLink: @escaping ReportLinkFactory,
-        makeCameraLink: @escaping CameraLinkFactory, makePreviewLink: @escaping PreviewLinkFactory
+        makeCameraLink: @escaping CameraLinkFactory, makePreviewLink: @escaping PreviewLinkFactory,
+        scan: @escaping @Sendable () async -> [BambuDiscovery.Found]
     ) {
+        self.scan = scan
         self.secrets = secrets
         self.retryDelays = retryDelays
         self.makeReportLink = makeReportLink
@@ -121,8 +135,11 @@ public final class BambuService: ObservableObject {
 
     // MARK: - Watching
 
-    public func watch(_ host: String) {
+    /// `serial`, when a widget knows it, lets a printer be followed if its
+    /// address changes.
+    public func watch(_ host: String, serial: String? = nil) {
         guard !host.isEmpty else { return }
+        if let serial, !serial.isEmpty { serials[host] = serial }
         watchCounts[host, default: 0] += 1
         if watchCounts[host] == 1 { connect(host) }
     }
@@ -133,6 +150,7 @@ public final class BambuService: ObservableObject {
             watchCounts[host] = count - 1
         } else {
             watchCounts[host] = nil
+            moves[host] = nil
             disconnect(host)
         }
     }
@@ -212,6 +230,7 @@ public final class BambuService: ObservableObject {
         switch event {
         case .connected(let serial):
             failures[host] = 0
+            serials[host] = serial
             update(host) {
                 $0.serial = serial
                 $0.connection = .connected
@@ -229,6 +248,7 @@ public final class BambuService: ObservableObject {
             guard problem != "Wrong access code", watchCounts[host] != nil else { return }
             let attempt = failures[host, default: 0]
             failures[host] = attempt + 1
+            if attempt + 1 >= 2 { locate(host) }
             let delay = retryDelays[min(attempt, retryDelays.count - 1)]
             retries[host] = Task { [weak self] in
                 try? await Task.sleep(for: delay)
@@ -283,6 +303,47 @@ public final class BambuService: ObservableObject {
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self, self.cameraCounts[host] != nil else { return }
             self.connectCamera(host)
+        }
+    }
+
+    // MARK: - Finding printers
+
+    /// Searches this Mac's networks for Bambu printers, for settings to list.
+    public func discover() {
+        guard !discovering else { return }
+        discovering = true
+        let scan = scan
+        Task {
+            let found = await scan()
+            discovered = found
+            discovering = false
+            remember(found)
+        }
+    }
+
+    private func remember(_ found: [BambuDiscovery.Found]) {
+        for printer in found where serials[printer.host] == nil { serials[printer.host] = printer.serial }
+    }
+
+    /// A printer that answered before and has gone quiet may only have been
+    /// given a new address by the router. Looks for its serial number, at
+    /// most every five minutes, and moves its access code along if found.
+    private func locate(_ host: String) {
+        guard let serial = serials[host] ?? printers[host]?.serial,
+            Date().timeIntervalSince(lastLocated[serial] ?? .distantPast) > 300
+        else { return }
+        lastLocated[serial] = Date()
+        let scan = scan
+        Task {
+            let found = await scan()
+            remember(found)
+            guard watchCounts[host] != nil, let match = found.first(where: { $0.serial == serial }),
+                match.host != host
+            else { return }
+            if let code = secrets.read(host), secrets.read(match.host) == nil {
+                try? secrets.write(code, for: match.host)
+            }
+            moves[host] = match.host
         }
     }
 

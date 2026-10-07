@@ -2,8 +2,9 @@ import SwiftUI
 
 /// The printer a Bambu Lab widget shows: its address, kept in the layout, and
 /// its access code, kept in the Keychain. Both are on the printer's own
-/// network settings screen. Connecting happens as soon as they're saved, so
-/// the line underneath says straight away whether the code was right.
+/// network settings screen, and Find Printers fills in the address. Connecting
+/// happens as soon as they're saved, so the line underneath says straight
+/// away whether the code was right.
 struct BambuPrinterEditor: View {
     let entry: ConfigSchemaEntry
     @Binding var config: WidgetConfig
@@ -24,6 +25,7 @@ struct BambuPrinterEditor: View {
                 TextField("192.168.1.50", text: $address)
                     .onSubmit(save)
             }
+            found
             row("Access Code") {
                 SecureField(hasSavedCode && trimmedAddress == savedHost ? "Saved" : "8 characters", text: $code)
                     .onSubmit(save)
@@ -39,6 +41,44 @@ struct BambuPrinterEditor: View {
         .onAppear {
             address = savedHost
             hasSavedCode = service.hasAccessCode(for: savedHost)
+        }
+    }
+
+    /// The printers a search found, each a button that fills in its address.
+    @ViewBuilder
+    private var found: some View {
+        HStack(spacing: 6) {
+            Spacer()
+            if service.discovering {
+                ProgressView().controlSize(.small)
+                Text("Looking on your network…")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            } else if service.discovered?.isEmpty == true {
+                Text("No Bambu Lab printers answered")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            Button("Find Printers") { service.discover() }
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .disabled(service.discovering)
+        }
+        if let printers = service.discovered, !printers.isEmpty {
+            HStack(spacing: 6) {
+                Spacer()
+                ForEach(printers) { printer in
+                    Button {
+                        address = printer.host
+                        config["serial"] = .string(printer.serial)
+                        hasSavedCode = service.hasAccessCode(for: printer.host)
+                    } label: {
+                        Text("\(printer.model ?? "Printer") · \(printer.host)")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(trimmedAddress == printer.host ? accent : nil)
+                }
+            }
         }
     }
 

@@ -149,7 +149,7 @@ struct GuideView: View {
                         rows: [
                             (
                                 "Connecting",
-                                "Type the printer's IP address and access code into the widget's settings; its network settings screen shows both. The code is kept in the Keychain."
+                                "Find Printers in the widget's settings lists the Bambu printers on your network; pick one and type its access code from the printer's network settings screen. The code is kept in the Keychain, and if the printer gets a new address the widget finds it again."
                             ),
                             (
                                 "LAN mode",

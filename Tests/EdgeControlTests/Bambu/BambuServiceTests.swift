@@ -18,8 +18,29 @@ private final class FakeLink: BambuLink, @unchecked Sendable {
     func cancel() { cancelled = true }
 }
 
+/// What a search of the network finds, set by the test.
+private final class FakeScan: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _result: [BambuDiscovery.Found] = []
+    private var _count = 0
+
+    var result: [BambuDiscovery.Found] {
+        get { lock.withLock { _result } }
+        set { lock.withLock { _result = newValue } }
+    }
+    var count: Int { lock.withLock { _count } }
+
+    func run() -> [BambuDiscovery.Found] {
+        lock.withLock {
+            _count += 1
+            return _result
+        }
+    }
+}
+
 @MainActor
 private final class FakeNetwork {
+    let scan = FakeScan()
     var reports: [(link: FakeLink, send: @MainActor @Sendable (BambuMQTTSession.Event) -> Void)] = []
     var cameras: [(link: FakeLink, send: @MainActor @Sendable (BambuCameraSession.Event) -> Void)] = []
     var previews: [(link: FakeLink, paths: [String], send: @MainActor @Sendable (BambuPreviewSession.Event) -> Void)] =
@@ -42,7 +63,8 @@ private final class FakeNetwork {
                 let link = FakeLink(host: host, accessCode: code)
                 self.previews.append((link, paths, handler))
                 return link
-            })
+            },
+            scan: { [scan] in scan.run() })
     }
 }
 
@@ -311,5 +333,87 @@ struct BambuPreviewFetchTests {
             try await Task.sleep(for: .milliseconds(30))
         }
         #expect(network.previews.count == 3)
+    }
+}
+
+@MainActor
+@Suite("Bambu printer discovery")
+struct BambuDiscoveryTests {
+    private let serial = "01P00A000000001"
+
+    @Test("a /24 network is every address but its own, its network and its broadcast")
+    func homeNetwork() {
+        let hosts = BambuDiscovery.hosts(address: 0xC0A8_010A, mask: 0xFFFF_FF00)  // 192.168.1.10/24
+        #expect(hosts.count == 253)
+        #expect(hosts.first == "192.168.1.1")
+        #expect(hosts.last == "192.168.1.254")
+        #expect(!hosts.contains("192.168.1.10"))
+    }
+
+    @Test("a big network is narrowed to the 256 addresses around this Mac; link-local is skipped")
+    func narrowing() {
+        let hosts = BambuDiscovery.hosts(address: 0x0A00_0507, mask: 0xFFFF_0000)  // 10.0.5.7/16
+        #expect(hosts.count == 253)
+        #expect(hosts.allSatisfy { $0.hasPrefix("10.0.5.") })
+        #expect(BambuDiscovery.hosts(address: 0x0A00_0001, mask: 0xFFFF_FFFC) == ["10.0.0.2"])
+        #expect(BambuDiscovery.hosts(address: 0xA9FE_0102, mask: 0xFFFF_0000).isEmpty)
+    }
+
+    @Test("only Bambu's authority and a serial-shaped name count as a printer")
+    func certificate() {
+        #expect(BambuDiscovery.isSerial("01P00A000000001"))
+        #expect(!BambuDiscovery.isSerial("printer.local"))
+        #expect(!BambuDiscovery.isSerial("01p00a000000001"))
+        #expect(BambuDiscovery.isBambuIssuer(Data("O=BBL Technologies Co., Ltd, CN=BBL CA".utf8)))
+        #expect(!BambuDiscovery.isBambuIssuer(Data("CN=Let's Encrypt".utf8)))
+    }
+
+    @Test("Find Printers lists what the search found")
+    func discover() async throws {
+        let network = FakeNetwork()
+        network.scan.result = [.init(host: "192.168.1.60", serial: serial)]
+        let service = network.service(secrets: InMemorySecretStore())
+
+        service.discover()
+        #expect(service.discovering)
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(!service.discovering)
+        #expect(service.discovered?.map(\.host) == ["192.168.1.60"])
+        #expect(service.discovered?.first?.model == "P1S")
+    }
+
+    @Test("a printer that goes quiet is looked for by serial, and its access code follows it")
+    func follows() async throws {
+        let network = FakeNetwork()
+        let store = InMemorySecretStore()
+        try store.write("12345678", for: "192.168.1.50")
+        let service = network.service(secrets: store)
+        network.scan.result = [.init(host: "192.168.1.77", serial: serial)]
+        service.watch("192.168.1.50", serial: serial)
+
+        network.reports[0].send(.failed("Not reachable"))
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(network.scan.count == 0)  // one failure is a blip
+
+        network.reports[1].send(.failed("Not reachable"))
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(network.scan.count == 1)
+        #expect(service.moves["192.168.1.50"] == "192.168.1.77")
+        #expect(store.read("192.168.1.77") == "12345678")
+    }
+
+    @Test("a wrong access code isn't a move, so nothing is searched")
+    func wrongCodeIsNotAMove() async throws {
+        let network = FakeNetwork()
+        let store = InMemorySecretStore()
+        try store.write("12345678", for: "192.168.1.50")
+        let service = network.service(secrets: store)
+        service.watch("192.168.1.50", serial: serial)
+
+        network.reports[0].send(.failed("Wrong access code"))
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(network.scan.count == 0)
     }
 }

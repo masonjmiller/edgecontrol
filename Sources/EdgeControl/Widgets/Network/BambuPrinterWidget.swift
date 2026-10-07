@@ -39,6 +39,7 @@ public final class BambuPrinterWidget: DashboardWidget {
             service: service,
             host: config.string("host").trimmingCharacters(in: .whitespaces),
             name: config.string("name").trimmingCharacters(in: .whitespaces),
+            config: config,
             picture: size.width >= 5
                 ? BambuPicture(rawValue: config.string("picture", default: "camera")) ?? .camera : .none
         )
@@ -53,9 +54,11 @@ private struct BambuPrinterView: View {
     @ObservedObject var service: BambuService
     let host: String
     let name: String
+    let config: WidgetConfig
     let picture: BambuPicture
 
     @Environment(\.themeSettings) private var ts
+    @EnvironmentObject private var layoutEngine: LayoutEngine
     @State private var watching: String?
     @State private var watchingCamera: String?
     @State private var watchingPreview: String?
@@ -80,6 +83,8 @@ private struct BambuPrinterView: View {
             .onChange(of: host) { syncWatching() }
             .onChange(of: wantsCamera) { syncWatching() }
             .onChange(of: wantsPreview) { syncWatching() }
+            .onChange(of: printer?.serial) { rememberSerial() }
+            .onChange(of: service.moves[host]) { followMove() }
             .onDisappear {
                 if let watching { service.unwatch(watching) }
                 if let watchingCamera { service.unwatchCamera(watchingCamera) }
@@ -402,7 +407,7 @@ private struct BambuPrinterView: View {
         let wanted = host.isEmpty ? nil : host
         if watching != wanted {
             if let watching { service.unwatch(watching) }
-            if let wanted { service.watch(wanted) }
+            if let wanted { service.watch(wanted, serial: config.string("serial")) }
             watching = wanted
         }
         let wantedCamera = wantsCamera ? host : nil
@@ -417,6 +422,31 @@ private struct BambuPrinterView: View {
             if let wantedPreview { service.watchPreview(wantedPreview) }
             watchingPreview = wantedPreview
         }
+    }
+
+    // MARK: - Remembering the printer
+
+    /// The serial number goes into the widget's settings once known, so the
+    /// printer can be found again if the router gives it a new address.
+    private func rememberSerial() {
+        guard let serial = printer?.serial, serial != config.string("serial") else { return }
+        save { $0["serial"] = .string(serial) }
+    }
+
+    private func followMove() {
+        guard let newHost = service.moves[host] else { return }
+        save { $0["host"] = .string(newHost) }
+    }
+
+    private func save(_ change: (inout WidgetConfig) -> Void) {
+        let pageId = config.string("_pageId")
+        let instanceId = config.string("_instanceId")
+        guard !pageId.isEmpty, !instanceId.isEmpty else { return }
+        var stored = config
+        stored["_pageId"] = nil
+        stored["_instanceId"] = nil
+        change(&stored)
+        layoutEngine.updateWidgetConfig(pageId: pageId, instanceId: instanceId, config: stored)
     }
 
     /// Pages next to the visible one stay rendered so swipes are smooth; the
