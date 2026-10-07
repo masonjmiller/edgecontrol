@@ -145,6 +145,20 @@ struct GuideView: View {
                             ("Circle", "Tap to complete the reminder everywhere."),
                         ])
                     section(
+                        "Bambu Lab Printer",
+                        rows: [
+                            (
+                                "Connecting",
+                                "Type the printer's IP address and access code into the widget's settings; its network settings screen shows both. The code is kept in the Keychain."
+                            ),
+                            (
+                                "LAN mode",
+                                "The widget only reads, so the printer's standard LAN access is enough. Developer Mode isn't needed."
+                            ),
+                            ("Camera", "P1 and A1 printers show their live view once the widget is five columns wide."),
+                            ("Spools", "Each AMS slot in its filament's color; the ring marks the one printing."),
+                        ])
+                    section(
                         "Widget Catalog",
                         rows: [
                             (
