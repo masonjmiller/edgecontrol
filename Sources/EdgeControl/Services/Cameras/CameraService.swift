@@ -19,6 +19,8 @@ public final class CameraService: ObservableObject {
     @Published public private(set) var lists: [URL: ListState] = [:]
     /// False while the displays sleep: nobody is watching, so nothing streams.
     @Published public private(set) var screensAwake = true
+    /// The camera open across the whole dashboard, if one is.
+    @Published public private(set) var fullScreen: CameraFullScreen?
 
     private let transport: CITransport
     private let pollInterval: Duration
@@ -38,12 +40,20 @@ public final class CameraService: ObservableObject {
         ] {
             screenObservers.append(
                 center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.screensAwake = awake }
+                    MainActor.assumeIsolated { self?.setScreensAwake(awake) }
                 })
         }
     }
 
     private var screenObservers: [NSObjectProtocol] = []
+
+    private func setScreensAwake(_ awake: Bool) {
+        screensAwake = awake
+        if let url = fullScreen?.camera.url {
+            holders[url, default: [:]][Self.fullScreenHolder] = awake
+            update(url)
+        }
+    }
 
     /// Cameras are on the LAN: a server that hasn't answered in ten seconds
     /// isn't going to, and the shared session would wait a full minute.
@@ -92,6 +102,97 @@ public final class CameraService: ObservableObject {
         }
     }
 
+    // MARK: - Players
+
+    /// One player per stream, shared by every view showing that camera: the
+    /// same camera on two widgets streams once, and a camera opens full
+    /// screen without connecting again.
+    private var players: [URL: LiveStreamPlayer] = [:]
+    /// Who is showing each stream, and whether they want it playing. A view
+    /// on a page off to the side shows it but doesn't.
+    private var holders: [URL: [String: Bool]] = [:]
+
+    func player(for url: URL) -> LiveStreamPlayer {
+        if let player = players[url] { return player }
+        let player = LiveStreamPlayer(url: url)
+        players[url] = player
+        return player
+    }
+
+    /// The stream plays while anyone showing it wants it to.
+    func setActive(_ active: Bool, _ player: LiveStreamPlayer, holder: String) {
+        if players[player.url] == nil { players[player.url] = player }
+        holders[player.url, default: [:]][holder] = active
+        update(player.url)
+    }
+
+    /// A view stopped showing the stream; with nobody left, the player goes.
+    func release(_ player: LiveStreamPlayer, holder: String) {
+        holders[player.url]?[holder] = nil
+        update(player.url)
+    }
+
+    private func update(_ url: URL) {
+        guard let player = players[url] else { return }
+        let wanted = holders[url]?.values.contains(true) ?? false
+        if wanted { player.start() } else { player.stop() }
+        if holders[url]?.isEmpty ?? true {
+            holders[url] = nil
+            players[url] = nil
+        }
+    }
+
+    // MARK: - Full screen
+
+    private static let fullScreenHolder = "full-screen"
+    /// Bumped with every claim, so a late release can't undo a newer one.
+    private var claims = 0
+    /// How long a closed camera keeps playing for the tiles to take it back.
+    var handBack: Duration = .seconds(1)
+
+    public func showFullScreen(_ cameras: [CameraFullScreen.Camera], at index: Int) {
+        guard cameras.indices.contains(index) else { return }
+        let opened = CameraFullScreen(cameras: cameras, index: index)
+        // Claimed before the tiles underneath let go, so it never stops.
+        claim(opened.camera.url)
+        fullScreen = opened
+    }
+
+    /// The next or previous camera, round the list.
+    public func stepFullScreen(by step: Int) {
+        guard let next = fullScreen?.moved(by: step) else { return }
+        claim(next.camera.url)
+        fullScreen = next
+    }
+
+    /// The camera plays on for a moment, until its tile has it again.
+    public func closeFullScreen() {
+        guard let url = fullScreen?.camera.url else { return }
+        fullScreen = nil
+        claims += 1
+        let claim = claims
+        let delay = handBack
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, self.claims == claim else { return }
+            self.holders[url]?[Self.fullScreenHolder] = nil
+            self.update(url)
+        }
+    }
+
+    /// The full-screen camera plays while it's open and the displays are on;
+    /// any other camera it held goes back to its tiles.
+    private func claim(_ url: URL) {
+        claims += 1
+        for other in holders.keys where other != url && holders[other]?[Self.fullScreenHolder] != nil {
+            holders[other]?[Self.fullScreenHolder] = nil
+            update(other)
+        }
+        _ = player(for: url)
+        holders[url, default: [:]][Self.fullScreenHolder] = screensAwake
+        update(url)
+    }
+
     public func start() {
         guard pollTask == nil else { return }
         let interval = pollInterval
@@ -121,5 +222,31 @@ public final class CameraService: ObservableObject {
         case .rateLimited: return "busy, try again shortly"
         case .decoding: return "didn't answer like go2rtc"
         }
+    }
+}
+
+/// A camera across the whole dashboard, and the cameras its widget shows,
+/// which the arrows step through.
+public struct CameraFullScreen: Equatable, Sendable {
+    public struct Camera: Equatable, Sendable {
+        public let name: String
+        public let url: URL
+
+        public init(name: String, url: URL) {
+            self.name = name
+            self.url = url
+        }
+    }
+
+    public let cameras: [Camera]
+    public private(set) var index: Int
+
+    public var camera: Camera { cameras[index] }
+
+    func moved(by step: Int) -> CameraFullScreen {
+        var moved = self
+        let count = cameras.count
+        moved.index = ((index + step) % count + count) % count
+        return moved
     }
 }

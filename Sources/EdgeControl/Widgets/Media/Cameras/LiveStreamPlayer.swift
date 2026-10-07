@@ -45,9 +45,14 @@ final class LiveStreamPlayer: ObservableObject {
 
     @Published private(set) var state: State = .connecting
     @Published private(set) var hasAudio = false
+    /// Held on purpose, as opposed to stalled: nothing reconnects or catches up.
+    @Published private(set) var isPaused = false
+    @Published var isMuted = true {
+        didSet { player.isMuted = isMuted }
+    }
 
     let player = AVPlayer()
-    private let url: URL
+    let url: URL
     private var tick: Task<Void, Never>?
     private var loadedAt = Date()
     private var lastProgress: (time: Double, at: Date)?
@@ -61,12 +66,22 @@ final class LiveStreamPlayer: ObservableObject {
         player.preventsDisplaySleepDuringVideoPlayback = false
     }
 
-    var isMuted: Bool {
-        get { player.isMuted }
-        set { player.isMuted = newValue }
+    var isRunning: Bool { tick != nil }
+
+    /// Holds the picture. Downloading stops too, so a paused camera costs nothing.
+    func pause() {
+        guard isRunning, !isPaused else { return }
+        isPaused = true
+        player.pause()
     }
 
-    var isRunning: Bool { tick != nil }
+    /// Plays again from live: a camera an hour behind is no use to anyone, and
+    /// the live-edge check jumps forward on the next tick.
+    func resume() {
+        guard isPaused else { return }
+        isPaused = false
+        lastProgress = nil
+    }
 
     func start() {
         guard tick == nil else { return }
@@ -87,6 +102,7 @@ final class LiveStreamPlayer: ObservableObject {
         player.replaceCurrentItem(with: nil)
         state = .connecting
         hasAudio = false
+        isPaused = false
         retryAt = nil
     }
 
@@ -101,6 +117,7 @@ final class LiveStreamPlayer: ObservableObject {
     }
 
     private func step() {
+        guard !isPaused else { return }
         let now = Date()
         if let retryAt {
             guard now >= retryAt else { return }

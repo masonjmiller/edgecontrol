@@ -90,7 +90,6 @@ private struct CamerasWidgetView: View {
     /// Keeps touch zone ids apart when the same widget is placed twice.
     @State private var instance = String(UUID().uuidString.prefix(8))
     @State private var currentId: String?
-    @State private var zoomedId: String?
     @State private var soundId: String?
     @State private var page = 0
     @State private var onScreen = true
@@ -100,15 +99,7 @@ private struct CamerasWidgetView: View {
 
     private var touchRegistry: TouchZoneRegistry { model.touchService.zoneRegistry }
     private var accent: Color { Theme.widgetPrimaryOrAccent("cameras", ts: ts) }
-    private var onAccent: Color { Self.readableText(on: accent) }
-
-    /// Dark text on light accents like yellow, white on the rest: the selected
-    /// tab sits on video, so it needs its contrast from the accent itself.
-    static func readableText(on color: Color) -> Color {
-        guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return .white }
-        let luminance = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent + 0.0722 * rgb.blueComponent
-        return luminance > 0.6 ? .black : .white
-    }
+    private var onAccent: Color { CameraStyle.readableText(on: accent) }
     private var listState: CameraService.ListState? { settings.server.flatMap { service.lists[$0] } }
     private var cameras: [CameraSource] { settings.cameras(list: listState) }
     /// Video runs to the card's edges, so it takes the card's corners. Tabs,
@@ -155,9 +146,9 @@ private struct CamerasWidgetView: View {
     private func single(_ cameras: [CameraSource]) -> some View {
         let current = cameras.first { $0.id == currentId } ?? cameras[0]
         return ZStack(alignment: .bottomLeading) {
-            tile(
-                current, showName: settings.showNames && cameras.count == 1, showSound: true, hidden: false,
-                onTap: nil)
+            tile(current, showName: settings.showNames && cameras.count == 1, showSound: true) {
+                openFullScreen(current, among: cameras)
+            }
             if cameras.count > 1 {
                 tabs(cameras, current: current.id)
                     .padding(8)
@@ -223,32 +214,23 @@ private struct CamerasWidgetView: View {
             let pages = (cameras.count + layout.perPage - 1) / layout.perPage
             let page = min(self.page, pages - 1)
             let visible = Array(cameras.dropFirst(page * layout.perPage).prefix(layout.perPage))
-            let zoomed = visible.first { $0.id == zoomedId }
             let frames = CameraGrid.frames(
                 count: visible.count, arrangement: layout, in: geo.size, spacing: spacing, fill: settings.fill)
 
             ZStack {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, camera in
-                    let isZoomed = camera.id == zoomed?.id
-                    let frame = isZoomed ? CGRect(origin: .zero, size: geo.size) : frames[index]
-                    // Every camera on the page keeps playing while one is
-                    // enlarged, so going back to the grid is instant.
-                    let hidden = zoomed != nil && !isZoomed
-                    tile(camera, showName: settings.showNames, showSound: isZoomed, hidden: hidden) {
-                        lastTouch = Date()
-                        zoomedId = isZoomed ? nil : camera.id
-                        if !isZoomed { soundId = nil }
+                    let frame = frames[index]
+                    // Sound is for full screen, where there's room for the button.
+                    tile(camera, showName: settings.showNames, showSound: false) {
+                        openFullScreen(camera, among: cameras)
                     }
                     .frame(width: frame.width, height: frame.height)
                     .position(x: frame.midX, y: frame.midY)
-                    .opacity(hidden ? 0 : 1)
-                    .zIndex(isZoomed ? 1 : 0)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
-            .animation(.easeInOut(duration: 0.2), value: zoomedId)
             .overlay(alignment: .bottom) {
-                if pages > 1 && zoomed == nil { pager(pages: pages, current: page) }
+                if pages > 1 { pager(pages: pages, current: page) }
             }
         }
     }
@@ -275,35 +257,38 @@ private struct CamerasWidgetView: View {
 
     @ViewBuilder
     private func tile(
-        _ camera: CameraSource, showName: Bool, showSound: Bool, hidden: Bool,
-        onTap: (@MainActor @Sendable () -> Void)?
+        _ camera: CameraSource, showName: Bool, showSound: Bool, onTap: @escaping @MainActor @Sendable () -> Void
     ) -> some View {
         if let url = playbackURL(camera) {
             CameraTile(
-                url: url, name: camera.name, active: onScreen && service.screensAwake, muted: soundId != camera.id,
-                fill: settings.fill,
+                service: service, stream: service.player(for: url), holder: "\(instance)-\(camera.id)",
+                name: camera.name,
+                // Hidden under a camera open full screen, the tiles rest.
+                active: onScreen && service.screensAwake && service.fullScreen == nil,
+                muted: soundId != camera.id, fill: settings.fill,
                 showName: showName, showSound: showSound, radius: tileRadius, accent: accent, onAccent: onAccent,
-                registry: touchRegistry, soundZoneId: "cameras-\(instance)-sound-\(camera.id)"
+                registry: touchRegistry, soundZoneId: "cameras-\(instance)-sound-\(camera.id)",
+                tapZoneId: "cameras-\(instance)-camera-\(camera.id)", onTap: onTap
             ) {
                 lastTouch = Date()
                 soundId = soundId == camera.id ? nil : camera.id
             }
             // A new player whenever the address changes, e.g. a new server.
             .id(url)
-            // A zone on a hidden camera would steal taps from the enlarged
-            // one above it: the smallest zone under a finger wins.
-            .overlay {
-                if let onTap, !hidden {
-                    Color.clear.touchTappable(
-                        id: "cameras-\(instance)-camera-\(camera.id)", registry: touchRegistry
-                    ) {
-                        Task { @MainActor in onTap() }
-                    }
-                }
-            }
         } else {
             unplayable(camera)
         }
+    }
+
+    /// Opens a camera across the whole dashboard, with the widget's other
+    /// cameras a swipe of the arrows away.
+    private func openFullScreen(_ camera: CameraSource, among cameras: [CameraSource]) {
+        lastTouch = Date()
+        let playable = cameras.compactMap { source in
+            playbackURL(source).map { CameraFullScreen.Camera(name: source.name, url: $0) }
+        }
+        guard let url = playbackURL(camera), let index = playable.firstIndex(where: { $0.url == url }) else { return }
+        service.showFullScreen(playable, at: index)
     }
 
     private func playbackURL(_ camera: CameraSource) -> URL? {
@@ -401,6 +386,9 @@ private struct CamerasWidgetView: View {
 /// One camera: the picture, a status line until it plays, and its name and
 /// sound button.
 private struct CameraTile: View {
+    @ObservedObject var service: CameraService
+    @ObservedObject var stream: LiveStreamPlayer
+    let holder: String
     let name: String
     let active: Bool
     let muted: Bool
@@ -412,17 +400,23 @@ private struct CameraTile: View {
     let onAccent: Color
     let registry: TouchZoneRegistry
     let soundZoneId: String
+    let tapZoneId: String
+    let onTap: @MainActor @Sendable () -> Void
     let onSound: @MainActor @Sendable () -> Void
 
-    @StateObject private var stream: LiveStreamPlayer
     @Environment(\.themeSettings) private var ts
 
     init(
-        url: URL, name: String, active: Bool, muted: Bool, fill: Bool, showName: Bool, showSound: Bool,
-        radius: CGFloat, accent: Color, onAccent: Color, registry: TouchZoneRegistry, soundZoneId: String,
-        onSound: @escaping @MainActor @Sendable () -> Void
+        service: CameraService, stream: LiveStreamPlayer, holder: String, name: String, active: Bool, muted: Bool,
+        fill: Bool, showName: Bool, showSound: Bool, radius: CGFloat, accent: Color, onAccent: Color,
+        registry: TouchZoneRegistry, soundZoneId: String, tapZoneId: String,
+        onTap: @escaping @MainActor @Sendable () -> Void, onSound: @escaping @MainActor @Sendable () -> Void
     ) {
-        _stream = StateObject(wrappedValue: LiveStreamPlayer(url: url))
+        self.tapZoneId = tapZoneId
+        self.onTap = onTap
+        self.service = service
+        self.stream = stream
+        self.holder = holder
         self.name = name
         self.active = active
         self.muted = muted
@@ -444,6 +438,11 @@ private struct CameraTile: View {
                 status
             }
         }
+        // Under the name and the speaker, so a click on the speaker mutes
+        // rather than opening the camera.
+        .touchTappable(id: tapZoneId, registry: registry) {
+            Task { @MainActor in onTap() }
+        }
         .overlay(alignment: .bottomLeading) {
             if showName {
                 Text(name)
@@ -454,6 +453,8 @@ private struct CameraTile: View {
                     .padding(.vertical, 3)
                     .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
                     .padding(8)
+                    // A tap on the name is a tap on the camera.
+                    .allowsHitTesting(false)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -469,12 +470,10 @@ private struct CameraTile: View {
         .contentShape(Rectangle())
         .onAppear {
             stream.isMuted = muted
-            if active { stream.start() }
+            service.setActive(active, stream, holder: holder)
         }
-        .onDisappear { stream.stop() }
-        .onChange(of: active) { _, isActive in
-            if isActive { stream.start() } else { stream.stop() }
-        }
+        .onDisappear { service.release(stream, holder: holder) }
+        .onChange(of: active) { _, isActive in service.setActive(isActive, stream, holder: holder) }
         .onChange(of: muted) { _, isMuted in stream.isMuted = isMuted }
     }
 
@@ -506,5 +505,16 @@ private struct CameraTile: View {
             .background(
                 muted ? Color.black.opacity(0.45) : accent,
                 in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+}
+
+enum CameraStyle {
+    /// Dark text on light accents like yellow, white on the rest: buttons and
+    /// the selected tab sit on video, so they need their contrast from the
+    /// accent itself.
+    static func readableText(on color: Color) -> Color {
+        guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return .white }
+        let luminance = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent + 0.0722 * rgb.blueComponent
+        return luminance > 0.6 ? .black : .white
     }
 }
