@@ -155,7 +155,10 @@ struct GuideView: View {
                                 "LAN mode",
                                 "The widget only reads, so the printer's standard LAN access is enough. Developer Mode isn't needed."
                             ),
-                            ("Camera", "P1 and A1 printers show their live view once the widget is five columns wide."),
+                            (
+                                "Picture",
+                                "Once the widget is five columns wide: the live view of P1 and A1 printers, or the model as the slicer drew it, solid up to the layer printing now."
+                            ),
                             ("Spools", "Each AMS slot in its filament's color; the ring marks the one printing."),
                         ])
                     section(

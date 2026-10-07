@@ -54,6 +54,9 @@ public struct BambuStatus: Equatable, Sendable {
     /// What a print is busy with before or between layers ("Heating bed").
     public let stage: String?
     public let jobName: String?
+    /// The file the printer is working from, as it names it; the model
+    /// picture is read from it.
+    public let jobFile: String?
     public let progress: Int
     public let remainingMinutes: Int?
     public let layer: Int?
@@ -72,6 +75,7 @@ public struct BambuStatus: Equatable, Sendable {
 
         let name = print["subtask_name"]?.text.flatMap { $0.isEmpty ? nil : $0 } ?? print["gcode_file"]?.text
         jobName = name.flatMap(Self.jobName)
+        jobFile = print["gcode_file"]?.text.flatMap { $0.isEmpty ? nil : $0 }
         progress = min(100, max(0, print["mc_percent"]?.int ?? 0))
         remainingMinutes = print["mc_remaining_time"]?.int
         layer = print["layer_num"]?.int
@@ -86,6 +90,20 @@ public struct BambuStatus: Equatable, Sendable {
     }
 
     public var isActive: Bool { [.preparing, .printing, .paused].contains(state) }
+
+    /// How much of the model is printed, 0…1: by layer when the printer
+    /// counts them, since a percentage includes heating and levelling.
+    public var printedFraction: Double {
+        switch state {
+        case .finished:
+            return 1
+        case .printing, .paused, .failed:
+            if let layer, let totalLayers { return min(1, Double(layer) / Double(totalLayers)) }
+            return Double(progress) / 100
+        default:
+            return 0
+        }
+    }
 
     // MARK: - Interpreting values
 

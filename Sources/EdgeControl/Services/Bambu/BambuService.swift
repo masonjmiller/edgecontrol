@@ -39,13 +39,21 @@ public final class BambuService: ObservableObject {
             _ host: String, _ accessCode: String,
             _ handler: @escaping @MainActor @Sendable (BambuCameraSession.Event) -> Void
         ) -> BambuLink
+    typealias PreviewLinkFactory =
+        @MainActor (
+            _ host: String, _ accessCode: String, _ paths: [String],
+            _ handler: @escaping @MainActor @Sendable (BambuPreviewSession.Event) -> Void
+        ) -> BambuLink
 
     @Published public private(set) var printers: [String: Printer] = [:]
     @Published public private(set) var frames: [String: BambuCameraFrame] = [:]
+    /// The current job's plate picture, for widgets showing the model.
+    @Published public private(set) var previews: [String: BambuModelPreview] = [:]
 
     private let secrets: CISecretStore
     private let makeReportLink: ReportLinkFactory
     private let makeCameraLink: CameraLinkFactory
+    private let makePreviewLink: PreviewLinkFactory
     private let retryDelays: [Duration]
 
     private var reports: [String: BambuJSON] = [:]
@@ -60,6 +68,13 @@ public final class BambuService: ObservableObject {
     private var cameraFailures: [String: Int] = [:]
     private var retries: [String: Task<Void, Never>] = [:]
     private var cameraRetries: [String: Task<Void, Never>] = [:]
+    private var previewCounts: [String: Int] = [:]
+    private var previewLinks: [String: BambuLink] = [:]
+    /// The job file each preview is for, fetched or being fetched.
+    private var previewJobs: [String: String] = [:]
+    private var previewFailures: [String: Int] = [:]
+    private var previewRetries: [String: Task<Void, Never>] = [:]
+    private var previewGenerations: [String: Int] = [:]
     private var screensAwake = true
     private var screenObservers: [NSObjectProtocol] = []
 
@@ -68,17 +83,19 @@ public final class BambuService: ObservableObject {
             secrets: KeychainSecretStore(service: "ai.pakslab.edgecontrol.bambu"),
             retryDelays: [.seconds(2), .seconds(5), .seconds(15), .seconds(30), .seconds(60)],
             makeReportLink: { BambuMQTTSession(host: $0, accessCode: $1, handler: $2) },
-            makeCameraLink: { BambuCameraSession(host: $0, accessCode: $1, handler: $2) })
+            makeCameraLink: { BambuCameraSession(host: $0, accessCode: $1, handler: $2) },
+            makePreviewLink: { BambuPreviewSession(host: $0, accessCode: $1, paths: $2, handler: $3) })
     }
 
     init(
         secrets: CISecretStore, retryDelays: [Duration], makeReportLink: @escaping ReportLinkFactory,
-        makeCameraLink: @escaping CameraLinkFactory
+        makeCameraLink: @escaping CameraLinkFactory, makePreviewLink: @escaping PreviewLinkFactory
     ) {
         self.secrets = secrets
         self.retryDelays = retryDelays
         self.makeReportLink = makeReportLink
         self.makeCameraLink = makeCameraLink
+        self.makePreviewLink = makePreviewLink
         let center = NSWorkspace.shared.notificationCenter
         for (name, awake) in [
             (NSWorkspace.screensDidSleepNotification, false), (NSWorkspace.screensDidWakeNotification, true),
@@ -204,6 +221,7 @@ public final class BambuService: ObservableObject {
             reports[host] = merged
             let status = BambuStatus(merged)
             if printers[host]?.status != status { update(host) { $0.status = status } }
+            fetchPreviewIfNeeded(host)
         case .failed(let problem):
             links[host] = nil
             update(host) { $0.connection = .failed(problem) }
@@ -265,6 +283,72 @@ public final class BambuService: ObservableObject {
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self, self.cameraCounts[host] != nil else { return }
             self.connectCamera(host)
+        }
+    }
+
+    // MARK: - Model picture
+
+    public func watchPreview(_ host: String) {
+        guard !host.isEmpty else { return }
+        previewCounts[host, default: 0] += 1
+        if previewCounts[host] == 1 { fetchPreviewIfNeeded(host) }
+    }
+
+    public func unwatchPreview(_ host: String) {
+        guard let count = previewCounts[host] else { return }
+        if count > 1 {
+            previewCounts[host] = count - 1
+            return
+        }
+        previewCounts[host] = nil
+        // A picture already fetched stays, so coming back to it is instant;
+        // one half-fetched is dropped and fetched again when wanted.
+        previewRetries.removeValue(forKey: host)?.cancel()
+        previewGenerations[host, default: 0] += 1
+        if let link = previewLinks.removeValue(forKey: host) {
+            link.cancel()
+            if previews[host] == nil { previewJobs[host] = nil }
+        }
+    }
+
+    /// One fetch per job: a new job file replaces the picture. Only .3mf
+    /// files carry pictures; a plain .gcode job has none.
+    private func fetchPreviewIfNeeded(_ host: String) {
+        guard previewCounts[host] != nil, let file = printers[host]?.status?.jobFile else { return }
+        if previewJobs[host] != file {
+            previewRetries.removeValue(forKey: host)?.cancel()
+            previewLinks.removeValue(forKey: host)?.cancel()
+            previews[host] = nil
+            previewFailures[host] = 0
+            previewJobs[host] = file
+        } else if previews[host] != nil || previewLinks[host] != nil || previewRetries[host] != nil {
+            return
+        }
+        guard file.lowercased().hasSuffix(".3mf"), previewFailures[host, default: 0] < 3,
+            let code = secrets.read(host)
+        else { return }
+        let generation = previewGenerations[host, default: 0] + 1
+        previewGenerations[host] = generation
+        previewLinks[host] = makePreviewLink(host, code, BambuPreviewSession.paths(forJobFile: file)) {
+            [weak self] event in
+            guard let self, self.previewGenerations[host] == generation else { return }
+            self.previewLinks[host] = nil
+            switch event {
+            case .preview(let preview):
+                self.previews[host] = preview
+            case .failed:
+                // A job sent some other way may have no file to read; three
+                // tries is enough to tell.
+                let attempt = self.previewFailures[host, default: 0]
+                self.previewFailures[host] = attempt + 1
+                let delay = self.retryDelays[min(attempt + 1, self.retryDelays.count - 1)]
+                self.previewRetries[host] = Task { [weak self] in
+                    try? await Task.sleep(for: delay)
+                    guard !Task.isCancelled, let self else { return }
+                    self.previewRetries[host] = nil
+                    self.fetchPreviewIfNeeded(host)
+                }
+            }
         }
     }
 

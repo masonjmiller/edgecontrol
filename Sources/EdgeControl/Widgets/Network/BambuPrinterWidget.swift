@@ -3,7 +3,7 @@ import SwiftUI
 public final class BambuPrinterWidget: DashboardWidget {
     public let widgetId = "bambu-printer"
     public let displayName = "Bambu Lab Printer"
-    public let description = "Print progress, temperatures, filament and camera of a Bambu Lab printer"
+    public let description = "Print progress, temperatures, filament, and the camera or model of a Bambu Lab printer"
     public let iconName = "cube"
     public let category: WidgetCategory = .network
     public let requiredServices: Set<ServiceKey> = [.bambu]
@@ -18,8 +18,11 @@ public final class BambuPrinterWidget: DashboardWidget {
             key: "name", label: "Name", type: .text, defaultValue: .string(""),
             help: "Shown above the print. Left empty, the model is shown, such as P1S."),
         ConfigSchemaEntry(
-            key: "showCamera", label: "Show Camera", type: .toggle, defaultValue: .bool(true),
-            help: "The live view of P1 and A1 printers, beside the print once the widget is five columns wide."),
+            key: "picture", label: "Picture", type: .picker, defaultValue: .string("camera"),
+            options: BambuPicture.allCases.map(\.rawValue),
+            help:
+                "Beside the print once the widget is five columns wide: the live view of P1 and A1 printers, or the model as the slicer drew it, filling in as layers print."
+        ),
     ]
     /// The progress bar and the active spool's ring.
     public let defaultColors = WidgetColors(primary: .green)
@@ -36,42 +39,54 @@ public final class BambuPrinterWidget: DashboardWidget {
             service: service,
             host: config.string("host").trimmingCharacters(in: .whitespaces),
             name: config.string("name").trimmingCharacters(in: .whitespaces),
-            showCamera: config.bool("showCamera", default: true) && size.width >= 5
+            picture: size.width >= 5
+                ? BambuPicture(rawValue: config.string("picture", default: "camera")) ?? .camera : .none
         )
     }
+}
+
+enum BambuPicture: String, CaseIterable {
+    case camera, model, none
 }
 
 private struct BambuPrinterView: View {
     @ObservedObject var service: BambuService
     let host: String
     let name: String
-    let showCamera: Bool
+    let picture: BambuPicture
 
     @Environment(\.themeSettings) private var ts
     @State private var watching: String?
     @State private var watchingCamera: String?
+    @State private var watchingPreview: String?
     @State private var onScreen = true
     @State private var offScreenTask: Task<Void, Never>?
 
     private var printer: BambuService.Printer? { service.printers[host] }
     private var primary: Color { Theme.widgetPrimary("bambu-printer", ts: ts, default: .green) }
     private var gap: CGFloat { max(6, CGFloat(ts.widgetGap)) }
-    private var wantsCamera: Bool { showCamera && onScreen && !host.isEmpty }
+    private var wantsCamera: Bool { picture == .camera && onScreen && !host.isEmpty }
+    private var wantsPreview: Bool { picture == .model && !host.isEmpty }
 
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(Theme.widgetPadding)
+            // Text runs the width and height of the tile, so it gets more room
+            // than the usual widget padding.
+            .padding(Theme.widgetPadding + 6)
             .background(onScreenTracker)
             .widgetCard()
             .onAppear(perform: syncWatching)
             .onChange(of: host) { syncWatching() }
             .onChange(of: wantsCamera) { syncWatching() }
+            .onChange(of: wantsPreview) { syncWatching() }
             .onDisappear {
                 if let watching { service.unwatch(watching) }
                 if let watchingCamera { service.unwatchCamera(watchingCamera) }
+                if let watchingPreview { service.unwatchPreview(watchingPreview) }
                 watching = nil
                 watchingCamera = nil
+                watchingPreview = nil
             }
     }
 
@@ -83,27 +98,121 @@ private struct BambuPrinterView: View {
                 detail: "Enter its IP address and access code in this widget's settings")
         } else if let status = printer?.status {
             GeometryReader { geo in
-                HStack(spacing: gap) {
-                    if showCamera, let frame = service.frames[host] {
-                        Image(decorative: frame.image, scale: 1)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous))
-                            .frame(maxWidth: geo.size.width * 0.55, maxHeight: .infinity)
+                let shown = shownPicture(status)
+                // A tile much taller than its picture is wide stacks: the job
+                // above, the picture filling the middle, progress below.
+                let stacked = shown != nil && geo.size.height >= geo.size.width * 0.7
+                Group {
+                    if stacked, let shown {
+                        VStack(alignment: .leading, spacing: max(16, gap)) {
+                            top(status)
+                            pictureView(shown, status)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            bottom(status)
+                        }
+                    } else {
+                        HStack(spacing: gap) {
+                            if let shown {
+                                pictureView(shown, status)
+                                    .frame(maxWidth: geo.size.width * shown.widthShare, maxHeight: .infinity)
+                            }
+                            VStack(alignment: .leading, spacing: 6) {
+                                top(status)
+                                Spacer(minLength: 0)
+                                bottom(status)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        }
                     }
-                    details(status)
-                        .opacity(printer?.connection == .connected ? 1 : 0.55)
                 }
+                .opacity(printer?.connection == .connected ? 1 : 0.55)
             }
         } else {
             connectionMessage
         }
     }
 
+    // MARK: - Picture
+
+    private enum Shown {
+        case camera(BambuCameraFrame)
+        case model(BambuModelPreview)
+
+        /// Side by side, how much of the tile's width the picture may take.
+        var widthShare: CGFloat {
+            if case .camera = self { return 0.55 }
+            return 0.45
+        }
+    }
+
+    /// The camera whenever it has a picture; the model only while there is a
+    /// job to show it for.
+    private func shownPicture(_ status: BambuStatus) -> Shown? {
+        switch picture {
+        case .camera:
+            return service.frames[host].map(Shown.camera)
+        case .model:
+            guard showsJob(status) else { return nil }
+            return service.previews[host].map(Shown.model)
+        case .none:
+            return nil
+        }
+    }
+
+    @ViewBuilder
+    private func pictureView(_ shown: Shown, _ status: BambuStatus) -> some View {
+        switch shown {
+        case .camera(let frame):
+            Image(decorative: frame.image, scale: 1)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous))
+        case .model(let preview):
+            modelPicture(preview, status)
+        }
+    }
+
+    /// The plate as the slicer drew it: faint where it hasn't printed yet,
+    /// solid up to the current layer. Dark filament is lifted to grey, or a
+    /// black print would vanish into the dashboard.
+    private func modelPicture(_ preview: BambuModelPreview, _ status: BambuStatus) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous)
+        let bounds = preview.modelBounds
+        let printed = status.printedFraction
+        let lift = preview.isDark ? 0.4 : 0
+        return ZStack {
+            shape.fill(Color.white.opacity(0.06))
+            Image(decorative: preview.image, scale: 1)
+                .resizable()
+                .scaledToFit()
+                .brightness(lift)
+                .opacity(0.22)
+            Image(decorative: preview.image, scale: 1)
+                .resizable()
+                .scaledToFit()
+                .brightness(lift)
+                .mask {
+                    GeometryReader { geo in
+                        Rectangle()
+                            .frame(height: geo.size.height * ((1 - bounds.maxY) + bounds.height * printed))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    }
+                }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(shape)
+    }
+
     // MARK: - Details
 
-    private func details(_ status: BambuStatus) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func showsJob(_ status: BambuStatus) -> Bool {
+        (status.isActive || status.state == .finished || status.state == .failed) && status.jobName != nil
+    }
+
+    /// The printer, any alert, and the job or "Ready".
+    @ViewBuilder
+    private func top(_ status: BambuStatus) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             header(status)
             if let alert = status.alerts.first {
                 Label("HMS \(alert.code)", systemImage: "exclamationmark.triangle.fill")
@@ -111,7 +220,7 @@ private struct BambuPrinterView: View {
                     .foregroundStyle(alert.severity >= .serious ? Theme.accentRed : Theme.accentYellow)
                     .lineLimit(1)
             }
-            if status.isActive || status.state == .finished || status.state == .failed, let job = status.jobName {
+            if showsJob(status), let job = status.jobName {
                 Text(job)
                     .font(Theme.body(ts))
                     .foregroundStyle(Theme.text1(ts))
@@ -126,18 +235,21 @@ private struct BambuPrinterView: View {
                         .font(Theme.caption(ts))
                         .foregroundStyle(Theme.accentRed)
                 }
-                Spacer(minLength: 0)
-                progress(status)
             } else {
                 Text(status.state == .unknown ? "Unknown" : "Ready")
                     .font(Theme.value(ts))
                     .foregroundStyle(Theme.text1(ts))
-                Spacer(minLength: 0)
             }
+        }
+    }
+
+    /// Progress while there's a job, then temperatures and spools.
+    private func bottom(_ status: BambuStatus) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if showsJob(status) { progress(status) }
             temperatures(status)
             filaments(status)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func header(_ status: BambuStatus) -> some View {
@@ -298,6 +410,12 @@ private struct BambuPrinterView: View {
             if let watchingCamera { service.unwatchCamera(watchingCamera) }
             if let wantedCamera { service.watchCamera(wantedCamera) }
             watchingCamera = wantedCamera
+        }
+        let wantedPreview = wantsPreview ? host : nil
+        if watchingPreview != wantedPreview {
+            if let watchingPreview { service.unwatchPreview(watchingPreview) }
+            if let wantedPreview { service.watchPreview(wantedPreview) }
+            watchingPreview = wantedPreview
         }
     }
 

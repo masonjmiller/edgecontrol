@@ -22,6 +22,8 @@ private final class FakeLink: BambuLink, @unchecked Sendable {
 private final class FakeNetwork {
     var reports: [(link: FakeLink, send: @MainActor @Sendable (BambuMQTTSession.Event) -> Void)] = []
     var cameras: [(link: FakeLink, send: @MainActor @Sendable (BambuCameraSession.Event) -> Void)] = []
+    var previews: [(link: FakeLink, paths: [String], send: @MainActor @Sendable (BambuPreviewSession.Event) -> Void)] =
+        []
 
     func service(secrets: CISecretStore) -> BambuService {
         BambuService(
@@ -34,6 +36,11 @@ private final class FakeNetwork {
             makeCameraLink: { host, code, handler in
                 let link = FakeLink(host: host, accessCode: code)
                 self.cameras.append((link, handler))
+                return link
+            },
+            makePreviewLink: { host, code, paths, handler in
+                let link = FakeLink(host: host, accessCode: code)
+                self.previews.append((link, paths, handler))
                 return link
             })
     }
@@ -216,5 +223,93 @@ struct BambuFrameReaderTests {
         var huge = BambuFrameReader()
         huge.append(Data([0xFF, 0xFF, 0xFF, 0x7F] + [UInt8](repeating: 0, count: 12)))
         #expect(throws: BambuFrameReader.DecodingError.malformed) { try huge.next() }
+    }
+}
+
+@MainActor
+@Suite("Bambu model picture fetching")
+struct BambuPreviewFetchTests {
+    private let host = "192.168.1.50"
+
+    private func service(_ network: FakeNetwork) throws -> BambuService {
+        let store = InMemorySecretStore()
+        try store.write("12345678", for: host)
+        return network.service(secrets: store)
+    }
+
+    private func job(_ file: String, percent: Int = 10) throws -> BambuMQTTSession.Event {
+        .report(
+            try bambuJSON(#"{"gcode_state":"RUNNING","gcode_file":"\#(file)","mc_percent":\#(percent)}"#),
+            complete: true)
+    }
+
+    @Test("a job's picture is fetched once, from where printers keep job files")
+    func once() throws {
+        let network = FakeNetwork()
+        let service = try service(network)
+        service.watch(host)
+        service.watchPreview(host)
+
+        network.reports[0].send(try job("Shelf_plate_2.3mf"))
+        network.reports[0].send(try job("Shelf_plate_2.3mf", percent: 11))
+
+        #expect(network.previews.count == 1)
+        #expect(network.previews[0].paths == ["/cache/Shelf_plate_2.3mf", "/Shelf_plate_2.3mf"])
+        network.previews[0].send(.preview(try #require(BambuModelPreview(png: testPNG(gray: 0.5)))))
+        #expect(service.previews[host] != nil)
+    }
+
+    @Test("a new job replaces the picture")
+    func newJob() throws {
+        let network = FakeNetwork()
+        let service = try service(network)
+        service.watch(host)
+        service.watchPreview(host)
+        network.reports[0].send(try job("Shelf_plate_2.3mf"))
+        network.previews[0].send(.preview(try #require(BambuModelPreview(png: testPNG(gray: 0.5)))))
+
+        network.reports[0].send(try job("Lid.3mf"))
+
+        #expect(service.previews[host] == nil)
+        #expect(network.previews.count == 2)
+        #expect(network.previews[1].paths.first == "/cache/Lid.3mf")
+    }
+
+    @Test("plain G-code jobs have no picture to fetch")
+    func gcode() throws {
+        let network = FakeNetwork()
+        let service = try service(network)
+        service.watch(host)
+        service.watchPreview(host)
+        network.reports[0].send(try job("calibration.gcode"))
+        #expect(network.previews.isEmpty)
+    }
+
+    @Test("nothing is fetched until a widget shows the model")
+    func onlyWhenShown() throws {
+        let network = FakeNetwork()
+        let service = try service(network)
+        service.watch(host)
+        network.reports[0].send(try job("Shelf_plate_2.3mf"))
+        #expect(network.previews.isEmpty)
+
+        service.watchPreview(host)
+        #expect(network.previews.count == 1)
+    }
+
+    @Test("a failed fetch is tried three times in all, then left")
+    func retries() async throws {
+        let network = FakeNetwork()
+        let service = try service(network)
+        service.watch(host)
+        service.watchPreview(host)
+        network.reports[0].send(try job("Shelf_plate_2.3mf"))
+
+        for attempt in 0..<3 {
+            #expect(network.previews.count == attempt + 1)
+            network.previews[attempt].send(.failed("Job file not found"))
+            try await Task.sleep(for: .milliseconds(30))
+        }
+        #expect(network.previews.count == 3)
     }
 }
