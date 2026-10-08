@@ -27,8 +27,10 @@ public final class ParcelWidget: DashboardWidget {
             key: "showUpdates", label: "Latest Update", type: .toggle, defaultValue: .bool(true),
             help: "The carrier's most recent scan under each delivery."),
     ]
-    /// Marks deliveries in transit; the other states keep their own colors.
     public let defaultColors = WidgetColors(primary: .blue)
+    /// Marks deliveries in transit in the theme's accent, like the rest of
+    /// the dashboard's highlights; the other states keep their own colors.
+    public let defaultsToAccentColor = true
 
     private let service: ParcelService
 
@@ -57,12 +59,13 @@ private struct ParcelWidgetView: View {
     @State private var watching: ParcelService.Filter?
 
     private var touchRegistry: TouchZoneRegistry { model.touchService.zoneRegistry }
-    private var accent: Color { Theme.widgetPrimary("parcel", ts: ts, default: .blue) }
-    private var gap: CGFloat { max(4, CGFloat(ts.widgetGap)) }
+    private var accent: Color { Theme.widgetPrimaryOrAccent("parcel", ts: ts) }
+    private var gap: CGFloat { CGFloat(ts.widgetGap) }
+    private var scale: CGFloat { CGFloat(ts.fontScale) }
 
     var body: some View {
         let now = Date()
-        VStack(spacing: gap) {
+        VStack(spacing: max(6, gap)) {
             if let deliveries = service.deliveries(filter) {
                 if deliveries.isEmpty {
                     emptyState
@@ -108,7 +111,7 @@ private struct ParcelWidgetView: View {
 
     private func row(_ delivery: ParcelDelivery, now: Date) -> some View {
         HStack(spacing: 10) {
-            badge(delivery.status, size: 30)
+            badge(delivery.status, size: 30 * scale)
             VStack(alignment: .leading, spacing: 2) {
                 Text(delivery.title)
                     .font(Theme.label(ts))
@@ -130,7 +133,13 @@ private struct ParcelWidgetView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous))
+        // Each row is drawn like a widget card, so rows sit the way the
+        // theme's widgets do: apart by its gap, or edge to edge.
+        .background(Theme.cardBg(ts), in: RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous)
+                .strokeBorder(Theme.border(ts), lineWidth: 1)
+        )
         .contentShape(Rectangle())
         .touchTappable(id: "parcel-\(instance)-\(delivery.id)", registry: touchRegistry) {
             Task { @MainActor in openParcel() }
@@ -142,7 +151,7 @@ private struct ParcelWidgetView: View {
     private func detail(_ delivery: ParcelDelivery, now: Date) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                badge(delivery.status, size: 40)
+                badge(delivery.status, size: 40 * scale)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(delivery.title)
                         .font(Theme.title(ts))
@@ -162,7 +171,7 @@ private struct ParcelWidgetView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Circle()
                                 .fill(index == 0 ? look(delivery.status).color : Theme.text3(ts))
-                                .frame(width: 7, height: 7)
+                                .frame(width: 7 * scale, height: 7 * scale)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(event.text.isEmpty ? "Update" : event.text)
                                     .font(Theme.caption(ts))
@@ -232,10 +241,11 @@ private struct ParcelWidgetView: View {
         return [look(delivery.status).text, carrier].compactMap { $0 }.joined(separator: " · ")
     }
 
-    /// "Arrived at facility · Memphis, TN · 2:14 PM"
+    /// "2:14 PM · Arrived at facility · Memphis, TN". The time leads because
+    /// carriers' place names are long and the end of the line gets cut.
     private func updateLine(_ event: ParcelDelivery.Event?, now: Date) -> String? {
         guard let event else { return nil }
-        let parts = [event.text, event.location, ParcelSchedule.when(event.date, now: now)]
+        let parts = [ParcelSchedule.when(event.date, now: now), event.text, event.location]
         let line = parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         return line.isEmpty ? nil : line
     }
