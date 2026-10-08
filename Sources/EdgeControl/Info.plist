@@ -35,7 +35,12 @@
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>EdgeControl displays your connected Bluetooth devices on the dashboard.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>The Cameras widget plays cameras and reads go2rtc servers on your local network.</string>
+    <string>The Cameras, Printers and Bambu Lab Printer widgets reach cameras, go2rtc servers and printers on your local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_ipp._tcp</string>
+        <string>_ipps._tcp</string>
+    </array>
     <key>NSAppleEventsUsageDescription</key>
     <string>EdgeControl reads what is playing in your browser and music apps and controls playback from the dashboard.</string>
 </dict>

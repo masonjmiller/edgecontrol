@@ -28,7 +28,7 @@ EdgeControl turns any display into a fully customizable system dashboard. You cr
 
 **Temperature (5)** — CPU Temp, GPU Temp, SSD Temp, Temperature History, Per-Core Temp (P-core/E-core breakdown)
 
-**Network (3)** — Network Stats (up/down speeds), WiFi Info (SSID, signal, channel), Bluetooth Devices
+**Network (4)** — Network Stats (up/down speeds), WiFi Info (SSID, signal, channel), Bluetooth Devices, Printers (state, problems and ink levels of the printers on your network)
 
 **Media (3)** — Now Playing (Safari, Chrome, Edge, Spotify, Apple Music — controls, artwork, progress), Audio Devices (output, volume), Cameras (live go2rtc and HLS cameras — one at a time with tabs, or a grid)
 
@@ -175,7 +175,7 @@ Sources/EdgeControl/
 └── Widgets/
     ├── System/       # CPU, Memory, Storage, Pressure, Cores, DiskIO, ProcessList
     ├── Temperature/  # CPU/GPU/SSD Temp, TempHistory, PerCoreTemp
-    ├── Network/      # NetworkStats, WiFiInfo, Bluetooth
+    ├── Network/      # NetworkStats, WiFiInfo, Bluetooth, Printers
     ├── Media/        # NowPlaying, AudioDevices
     ├── Info/         # Weather, Clock, WorldClocks, DayProgress, MoonPhase
     ├── DevTools/     # CICDRuns
@@ -190,7 +190,7 @@ Sources/EdgeControlWidgets/   # macOS Desktop Widget Extension (WidgetKit)
 
 - **Location** — weather data (Open-Meteo, free API)
 - **Bluetooth** — connected device list
-- **Local Network** — the Cameras widget reaches go2rtc and cameras on your network
+- **Local Network** — the Cameras widget reaches go2rtc and cameras on your network, and the Printers and Bambu Lab Printer widgets read printers' status
 
 ## Community & Support
 

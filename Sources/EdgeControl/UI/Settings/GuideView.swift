@@ -163,6 +163,23 @@ struct GuideView: View {
                             ),
                         ])
                     section(
+                        "Printers",
+                        rows: [
+                            (
+                                "Finding printers",
+                                "Printers that work with AirPrint or Mopria appear by themselves, the same ones the Print dialog lists."
+                            ),
+                            (
+                                "Printer",
+                                "All Printers lists each one; picking one gives it the whole widget, with its ink."
+                            ),
+                            (
+                                "Ink",
+                                "Each tank or cartridge in its own color. A red outline means the printer says it is low."
+                            ),
+                            ("Tap", "Opens the printer's own web page, for its settings and supply details."),
+                        ])
+                    section(
                         "Widget Catalog",
                         rows: [
                             (
