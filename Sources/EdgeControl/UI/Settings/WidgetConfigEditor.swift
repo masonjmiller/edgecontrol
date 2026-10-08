@@ -48,6 +48,8 @@ struct WidgetConfigEditor: View {
             timeRow(entry)
         case .colorPicker:
             EmptyView()
+        case .packageList:
+            PackageListEditor(entry: entry, config: $config, accent: accent)
         }
     }
 

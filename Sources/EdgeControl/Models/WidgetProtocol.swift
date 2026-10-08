@@ -312,6 +312,9 @@ public enum ConfigFieldType: String, Codable, Hashable, Sendable {
     case colorPicker
     /// A time of day, stored as an "HH:mm" string.
     case time
+    /// The packages a Packages widget lists, each a JSON-encoded
+    /// `TrackedPackage` in a string array.
+    case packageList
 }
 
 // MARK: - Service Key
@@ -346,6 +349,9 @@ public protocol DashboardWidget: Identifiable where ID == String {
     var isConfigurable: Bool { get }
     var configSchema: [ConfigSchemaEntry] { get }
     var defaultColors: WidgetColors { get }
+    /// True for a widget whose color, until the user picks one on the Theme
+    /// page, is the theme's accent rather than `defaultColors.primary`.
+    var defaultsToAccentColor: Bool { get }
     /// Services this widget requires. Empty = self-contained (no external data).
     var requiredServices: Set<ServiceKey> { get }
 
@@ -365,6 +371,8 @@ extension DashboardWidget {
     }
 
     public var requiredServices: Set<ServiceKey> { [] }
+
+    public var defaultsToAccentColor: Bool { false }
 
     public func settingsBody(config: Binding<WidgetConfig>) -> any View {
         EmptyView()
@@ -395,7 +403,7 @@ public enum WidgetLaunch {
         name.contains("Activity Monitor")
     }
     /// Widgets whose taps already do something keep their behavior.
-    public static let excluded: Set<String> = ["cicd-runs"]
+    public static let excluded: Set<String> = ["cicd-runs", "packages"]
 
     public static func defaultApp(for widgetId: String) -> String {
         switch widgetId {

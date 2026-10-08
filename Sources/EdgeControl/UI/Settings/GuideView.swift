@@ -145,6 +145,19 @@ struct GuideView: View {
                             ("Circle", "Tap to complete the reminder everywhere."),
                         ])
                     section(
+                        "Packages",
+                        rows: [
+                            (
+                                "Paste",
+                                "Copy a tracking number, or a whole shipping email, and tap Paste on the widget. The carrier is worked out from the number."
+                            ),
+                            ("Tap", "Opens the carrier's tracking page for that package."),
+                            (
+                                "Settings",
+                                "Rename a package, pick its carrier if the number was taken for another's, or take it off. Packages also leave by themselves after Remove After."
+                            ),
+                        ])
+                    section(
                         "Widget Catalog",
                         rows: [
                             (
