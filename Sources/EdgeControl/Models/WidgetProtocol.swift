@@ -312,6 +312,9 @@ public enum ConfigFieldType: String, Codable, Hashable, Sendable {
     case colorPicker
     /// A time of day, stored as an "HH:mm" string.
     case time
+    /// The Parcel API key. It is kept in the Keychain, not the layout, and
+    /// shared by every Parcel widget, so the field stores nothing itself.
+    case parcelKey
 }
 
 // MARK: - Service Key
@@ -331,6 +334,7 @@ public enum ServiceKey: String, CaseIterable, Hashable, Sendable {
     case process  // ProcessMonitorService
     case cicd  // CICDService — GitHub, Forgejo, any future host
     case reminders  // RemindersService (EventKit)
+    case parcel  // ParcelService (Parcel Premium API)
 }
 
 // MARK: - Dashboard Widget Protocol
