@@ -110,6 +110,7 @@ public final class WidgetRegistry: ObservableObject {
         register(StickyNoteWidget(store: model.noteStore))
         register(MoonPhaseWidget())
         register(ParcelWidget(service: model.parcelService))
+        register(PackagesWidget())
 
         // DevTools
         register(CICDRunsWidget(service: model.cicdService))

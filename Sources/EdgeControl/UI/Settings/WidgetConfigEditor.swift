@@ -57,6 +57,8 @@ struct WidgetConfigEditor: View {
             BambuPrinterEditor(entry: entry, config: $config, service: model.bambuService, accent: accent)
         case .parcelKey:
             ParcelKeyEditor(entry: entry, service: model.parcelService, accent: accent)
+        case .packageList:
+            PackageListEditor(entry: entry, config: $config, accent: accent)
         }
     }
 

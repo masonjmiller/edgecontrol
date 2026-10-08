@@ -325,6 +325,9 @@ public enum ConfigFieldType: String, Codable, Hashable, Sendable {
     /// The Parcel API key. It is kept in the Keychain, not the layout, and
     /// shared by every Parcel widget, so the field stores nothing itself.
     case parcelKey
+    /// The packages a Packages widget lists, each a JSON-encoded
+    /// `TrackedPackage` in a string array.
+    case packageList
 }
 
 // MARK: - Service Key
@@ -417,7 +420,7 @@ public enum WidgetLaunch {
         name.contains("Activity Monitor")
     }
     /// Widgets whose taps already do something keep their behavior.
-    public static let excluded: Set<String> = ["cicd-runs", "cameras", "parcel"]
+    public static let excluded: Set<String> = ["cicd-runs", "cameras", "parcel", "packages"]
 
     public static func defaultApp(for widgetId: String) -> String {
         switch widgetId {
