@@ -115,17 +115,17 @@ private struct ParcelWidgetView: View {
             }
             if let note = staleNote {
                 noteText(note)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, Theme.widgetPadding)
+                    .padding(.vertical, 8)
             }
         }
         .padding(gap)
     }
 
     private func row(_ delivery: ParcelDelivery, now: Date) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             badge(delivery.status, size: 30 * scale)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(delivery.title)
                     .font(Theme.label(ts))
                     .foregroundStyle(Theme.text1(ts))
@@ -144,10 +144,11 @@ private struct ParcelWidgetView: View {
             Spacer(minLength: 8)
             arrival(delivery, now: now, large: false)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        // Each row is drawn like a widget card, so rows sit the way the
-        // theme's widgets do: apart by its gap, or edge to edge.
+        // Each row is drawn like a widget card, with a card's padding, so
+        // rows sit the way the theme's widgets do: apart by its gap, or
+        // edge to edge.
+        .padding(.horizontal, Theme.widgetPadding)
+        .padding(.vertical, 12)
         .background(Theme.cardBg(ts), in: RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radius(ts), style: .continuous)
