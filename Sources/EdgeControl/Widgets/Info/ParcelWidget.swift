@@ -65,32 +65,26 @@ private struct ParcelWidgetView: View {
 
     var body: some View {
         let now = Date()
-        VStack(spacing: max(6, gap)) {
-            if let deliveries = service.deliveries(filter) {
-                if deliveries.isEmpty {
-                    emptyState
-                } else if deliveries.count == 1 {
-                    detail(deliveries[0], now: now)
-                } else {
-                    TouchScrollView {
-                        VStack(spacing: gap) {
-                            ForEach(deliveries) { row($0, now: now) }
+        Group {
+            if let deliveries = service.deliveries(filter), deliveries.count > 1 {
+                list(deliveries, now: now)
+            } else {
+                VStack(spacing: max(6, gap)) {
+                    if let deliveries = service.deliveries(filter) {
+                        if let only = deliveries.first {
+                            detail(only, now: now)
+                        } else {
+                            emptyState
                         }
+                        if let note = staleNote { noteText(note) }
+                    } else {
+                        problemState
                     }
                 }
-                if let note = staleNote {
-                    Text(note)
-                        .font(Theme.micro(ts))
-                        .foregroundStyle(Theme.text3(ts))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            } else {
-                problemState
+                .padding(Theme.widgetPadding)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(Theme.widgetPadding)
         .widgetCard()
         .onAppear(perform: syncWatching)
         .onChange(of: filter) { syncWatching() }
@@ -108,6 +102,25 @@ private struct ParcelWidgetView: View {
     }
 
     // MARK: - Several deliveries
+
+    /// The rows are cards of their own, so they sit inside the widget the
+    /// way widgets sit on the page: inset by the theme's gap, and edge to
+    /// edge when the gap is nothing.
+    private func list(_ deliveries: [ParcelDelivery], now: Date) -> some View {
+        VStack(spacing: 0) {
+            TouchScrollView {
+                VStack(spacing: gap) {
+                    ForEach(deliveries) { row($0, now: now) }
+                }
+            }
+            if let note = staleNote {
+                noteText(note)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
+        }
+        .padding(gap)
+    }
 
     private func row(_ delivery: ParcelDelivery, now: Date) -> some View {
         HStack(spacing: 10) {
@@ -320,6 +333,14 @@ private struct ParcelWidgetView: View {
         case nil:
             message(symbol: "shippingbox", title: "CHECKING PARCEL", detail: nil)
         }
+    }
+
+    private func noteText(_ note: String) -> some View {
+        Text(note)
+            .font(Theme.micro(ts))
+            .foregroundStyle(Theme.text3(ts))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Under a list that couldn't be refreshed: why, and how old it is.
