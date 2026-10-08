@@ -7,7 +7,9 @@ import Testing
 struct CameraFullScreenTests {
     private let beans = URL(string: "http://127.0.0.1:9/api/stream.m3u8?src=beans")!
     private let plants = URL(string: "http://127.0.0.1:9/api/stream.m3u8?src=plant_wall")!
-    private var cameras: [CameraFullScreen.Camera] { [.init(name: "Beans", url: beans), .init(name: "Plant wall", url: plants)] }
+    private var cameras: [CameraFullScreen.Camera] {
+        [.init(name: "Beans", url: beans), .init(name: "Plant wall", url: plants)]
+    }
 
     private func service() -> CameraService {
         let service = CameraService(transport: StubTransport(replies: []))

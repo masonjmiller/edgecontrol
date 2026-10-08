@@ -8,10 +8,12 @@ struct CameraFullScreenLayer: View {
     var body: some View {
         ZStack {
             if let fullScreen = service.fullScreen {
-                CameraFullScreenView(service: service, stream: service.player(for: fullScreen.camera.url), at: fullScreen)
-                    // Stepping to another camera is a new player and new controls.
-                    .id(fullScreen.camera.url)
-                    .transition(.opacity)
+                CameraFullScreenView(
+                    service: service, stream: service.player(for: fullScreen.camera.url), at: fullScreen
+                )
+                // Stepping to another camera is a new player and new controls.
+                .id(fullScreen.camera.url)
+                .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: service.fullScreen)
@@ -101,7 +103,8 @@ private struct CameraFullScreenView: View {
                 liveBadge
                 Spacer()
                 if stream.hasAudio {
-                    button(stream.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", id: "sound", lit: !stream.isMuted) {
+                    let sound = stream.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+                    button(sound, id: "sound", lit: !stream.isMuted) {
                         stream.isMuted.toggle()
                     }
                 }
