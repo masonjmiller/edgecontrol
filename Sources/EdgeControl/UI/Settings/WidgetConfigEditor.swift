@@ -55,6 +55,8 @@ struct WidgetConfigEditor: View {
             PrinterPickerRow(entry: entry, config: $config, service: model.printerService, accent: accent)
         case .bambuPrinter:
             BambuPrinterEditor(entry: entry, config: $config, service: model.bambuService, accent: accent)
+        case .parcelKey:
+            ParcelKeyEditor(entry: entry, service: model.parcelService, accent: accent)
         }
     }
 

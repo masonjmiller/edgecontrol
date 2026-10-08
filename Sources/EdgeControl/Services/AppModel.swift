@@ -26,6 +26,7 @@ public final class AppModel: ObservableObject {
     public let cameraService = CameraService()
     public let printerService = PrinterService()
     public let bambuService = BambuService()
+    public let parcelService = ParcelService()
     public let accountStore = CIAccountStore()
     public let noteStore = NoteStore()
     /// Held so the global key stays registered for the app's lifetime, and so
@@ -142,6 +143,7 @@ public final class AppModel: ObservableObject {
         case .cameras: return cameraService
         case .printers: return printerService
         case .bambu: return bambuService
+        case .parcel: return parcelService
         }
     }
 
@@ -183,3 +185,4 @@ extension CICDService: ServiceLifecycle {}
 extension CameraService: ServiceLifecycle {}
 extension PrinterService: ServiceLifecycle {}
 extension BambuService: ServiceLifecycle {}
+extension ParcelService: ServiceLifecycle {}

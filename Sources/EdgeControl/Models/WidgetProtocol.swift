@@ -322,6 +322,9 @@ public enum ConfigFieldType: String, Codable, Hashable, Sendable {
     /// A Bambu Lab printer's address, stored as a string, with its access
     /// code, which goes to the Keychain rather than the layout.
     case bambuPrinter
+    /// The Parcel API key. It is kept in the Keychain, not the layout, and
+    /// shared by every Parcel widget, so the field stores nothing itself.
+    case parcelKey
 }
 
 // MARK: - Service Key
@@ -344,6 +347,7 @@ public enum ServiceKey: String, CaseIterable, Hashable, Sendable {
     case cameras  // CameraService — go2rtc camera lists
     case printers  // PrinterService (IPP, found over Bonjour)
     case bambu  // BambuService (MQTT to Bambu Lab printers)
+    case parcel  // ParcelService (Parcel Premium API)
 }
 
 // MARK: - Dashboard Widget Protocol
