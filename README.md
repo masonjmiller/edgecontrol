@@ -28,7 +28,7 @@ EdgeControl turns any display into a fully customizable system dashboard. You cr
 
 **Temperature (5)** — CPU Temp, GPU Temp, SSD Temp, Temperature History, Per-Core Temp (P-core/E-core breakdown)
 
-**Network (4)** — Network Stats (up/down speeds), WiFi Info (SSID, signal, channel), Bluetooth Devices, Printers (state, problems and ink levels of the printers on your network)
+**Network (5)** — Network Stats (up/down speeds), WiFi Info (SSID, signal, channel), Bluetooth Devices, Printers (state, problems and ink levels of the printers on your network), Bambu Lab Printer (print progress, temperatures, AMS spools, and the P1/A1 camera or the model filling in as it prints, over the local network)
 
 **Media (3)** — Now Playing (Safari, Chrome, Edge, Spotify, Apple Music — controls, artwork, progress), Audio Devices (output, volume), Cameras (live go2rtc and HLS cameras — one at a time with tabs, or a grid)
 
@@ -175,7 +175,7 @@ Sources/EdgeControl/
 └── Widgets/
     ├── System/       # CPU, Memory, Storage, Pressure, Cores, DiskIO, ProcessList
     ├── Temperature/  # CPU/GPU/SSD Temp, TempHistory, PerCoreTemp
-    ├── Network/      # NetworkStats, WiFiInfo, Bluetooth, Printers
+    ├── Network/      # NetworkStats, WiFiInfo, Bluetooth, Printers, BambuPrinter
     ├── Media/        # NowPlaying, AudioDevices
     ├── Info/         # Weather, Clock, WorldClocks, DayProgress, MoonPhase
     ├── DevTools/     # CICDRuns

@@ -53,6 +53,8 @@ struct WidgetConfigEditor: View {
             CameraListEditor(entry: entry, config: $config, accent: accent)
         case .printerPicker:
             PrinterPickerRow(entry: entry, config: $config, service: model.printerService, accent: accent)
+        case .bambuPrinter:
+            BambuPrinterEditor(entry: entry, config: $config, service: model.bambuService, accent: accent)
         }
     }
 

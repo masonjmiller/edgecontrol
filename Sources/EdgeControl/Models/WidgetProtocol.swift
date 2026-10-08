@@ -319,6 +319,9 @@ public enum ConfigFieldType: String, Codable, Hashable, Sendable {
     /// means every printer. Like `notePicker`, its options are found while
     /// the app runs, so they cannot be part of the schema.
     case printerPicker
+    /// A Bambu Lab printer's address, stored as a string, with its access
+    /// code, which goes to the Keychain rather than the layout.
+    case bambuPrinter
 }
 
 // MARK: - Service Key
@@ -340,6 +343,7 @@ public enum ServiceKey: String, CaseIterable, Hashable, Sendable {
     case reminders  // RemindersService (EventKit)
     case cameras  // CameraService — go2rtc camera lists
     case printers  // PrinterService (IPP, found over Bonjour)
+    case bambu  // BambuService (MQTT to Bambu Lab printers)
 }
 
 // MARK: - Dashboard Widget Protocol
