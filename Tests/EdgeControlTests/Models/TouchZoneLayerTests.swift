@@ -9,8 +9,12 @@ struct TouchZoneLayerTests {
     func smallestWins() {
         let registry = TouchZoneRegistry()
         var hit = ""
-        registry.register(id: "card", frame: CGRect(x: 0, y: 0, width: 400, height: 300)) { MainActor.assumeIsolated { hit = "card" } }
-        registry.register(id: "button", frame: CGRect(x: 10, y: 10, width: 40, height: 40)) { MainActor.assumeIsolated { hit = "button" } }
+        registry.register(id: "card", frame: CGRect(x: 0, y: 0, width: 400, height: 300)) {
+            MainActor.assumeIsolated { hit = "card" }
+        }
+        registry.register(id: "button", frame: CGRect(x: 10, y: 10, width: 40, height: 40)) {
+            MainActor.assumeIsolated { hit = "button" }
+        }
         #expect(registry.handleTap(at: CGPoint(x: 20, y: 20)))
         #expect(hit == "button")
     }

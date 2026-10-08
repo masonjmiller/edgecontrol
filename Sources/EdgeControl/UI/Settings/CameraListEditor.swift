@@ -37,9 +37,12 @@ private struct CameraListEditorContent: View {
                 .foregroundStyle(Theme.textSecondary)
 
             if chosen.isEmpty {
-                Text(server == nil ? "Set a go2rtc server above, or add an HLS stream." : "Showing every camera on the server.")
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(Theme.textTertiary)
+                Text(
+                    server == nil
+                        ? "Set a go2rtc server above, or add an HLS stream." : "Showing every camera on the server."
+                )
+                .font(.system(size: 12, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
             }
             ForEach(Array(chosen.enumerated()), id: \.element) { index, item in
                 row(item, at: index)
