@@ -60,6 +60,7 @@ final class HIDTouchInputSource: NSObject, TouchInputSource {
     var onOpenStatus: ((String) -> Void)?
     private var sample = RawTouchSample()
     private var started = false
+    private var requestedAccess = false
     private var openedDevices: [IOHIDDevice] = []
 
     // Corsair XENEON EDGE vendor/product IDs
@@ -150,6 +151,15 @@ final class HIDTouchInputSource: NSObject, TouchInputSource {
             let result = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
             let success = result == kIOReturnSuccess
             TouchLogger.log("device \(usageKey(device)) open \(success ? "ok" : "failed (\(result))")")
+            // Seizing the panel's mouse interface takes Input Monitoring.
+            // Without it macOS keeps treating the panel as a mouse, which
+            // clicks wherever the pointer lands as well as where EdgeControl
+            // delivers the touch. Ask once; macOS remembers the answer.
+            if result == kIOReturnNotPermitted, !requestedAccess {
+                requestedAccess = true
+                let granted = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+                TouchLogger.log("Input Monitoring \(granted ? "granted" : "requested")")
+            }
             if !success {
                 IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
             }
@@ -192,7 +202,9 @@ final class HIDTouchInputSource: NSObject, TouchInputSource {
             sample.y = IOHIDValueGetIntegerValue(value)
             let max = IOHIDElementGetLogicalMax(element)
             if max > 0 { sample.maxY = max }
-        case (9, 1): sample.pressed = IOHIDValueGetIntegerValue(value) != 0
+        // Contact: the mouse interface's button, or the touchscreen's own
+        // tip switch, whichever interface EdgeControl could open.
+        case (9, 1), (13, 0x42): sample.pressed = IOHIDValueGetIntegerValue(value) != 0
         default: return
         }
         // A report's values arrive one at a time, contact before position,
