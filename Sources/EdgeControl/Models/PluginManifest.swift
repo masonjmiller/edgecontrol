@@ -63,7 +63,7 @@ public struct PluginMenuItem: Codable, Hashable, Sendable {
         self.openURL = openURL
     }
 
-    public enum Target: Equatable, Sendable {
+    public enum Target: Codable, Hashable, Sendable {
         case app(bundleId: String)
         case url(URL)
     }
@@ -73,6 +73,13 @@ public struct PluginMenuItem: Codable, Hashable, Sendable {
     public func target(forPlugin pluginId: String) -> Target? {
         let title = title.trimmingCharacters(in: .whitespaces)
         guard !title.isEmpty, title.count <= 60 else { return nil }
+        return Self.target(openApp: openApp, openURL: openURL, forPlugin: pluginId)
+    }
+
+    /// What `openApp` or `openURL` opens for a plugin, or nil when it's
+    /// something a plugin may not open. A settings button follows the same
+    /// rule as a menu item.
+    public static func target(openApp: String?, openURL: String?, forPlugin pluginId: String) -> Target? {
         if let openApp {
             let vendor = pluginId.split(separator: ".").prefix(2)
             let app = openApp.split(separator: ".", omittingEmptySubsequences: false)
@@ -185,14 +192,38 @@ public struct PluginSizeRange: Codable, Sendable {
 public struct PluginConfigField: Codable, Sendable {
     public let key: String
     public let label: String
-    public let type: String  // "string", "number", "boolean", "color", "select"
+    public let type: String  // "string", "number", "boolean", "color", "select", "button"
     public let defaultValue: PluginConfigValue
     public let options: [String]?  // for "select" type
+    /// For "button": what it opens, by the same rule as a menu item.
+    public let openApp: String?
+    public let openURL: String?
+    /// Shows the field only while another field has one of some values.
+    public let showWhen: ConfigCondition?
 
     enum CodingKeys: String, CodingKey {
         case key, label, type
         case defaultValue = "default"
-        case options
+        case options, openApp, openURL, showWhen
+    }
+}
+
+extension PluginConfigField {
+    /// A button holds no value, so it needs no default. Every other field
+    /// still needs one, and a null default is still refused.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = try container.decode(String.self, forKey: .key)
+        label = try container.decode(String.self, forKey: .label)
+        type = try container.decode(String.self, forKey: .type)
+        defaultValue =
+            type == "button"
+            ? try container.decodeIfPresent(PluginConfigValue.self, forKey: .defaultValue) ?? .string("")
+            : try container.decode(PluginConfigValue.self, forKey: .defaultValue)
+        options = try container.decodeIfPresent([String].self, forKey: .options)
+        openApp = try container.decodeIfPresent(String.self, forKey: .openApp)
+        openURL = try container.decodeIfPresent(String.self, forKey: .openURL)
+        showWhen = try container.decodeIfPresent(ConfigCondition.self, forKey: .showWhen)
     }
 }
 

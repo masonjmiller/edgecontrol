@@ -237,4 +237,76 @@ struct PluginManifestTests {
     func shortPluginId() {
         #expect(PluginMenuItem(title: "Edit", openApp: "demo.helper.app").target(forPlugin: "demo") == nil)
     }
+
+    // MARK: settings buttons and conditions
+
+    private func withSchema(_ fields: String) -> String {
+        wellFormed.replacingOccurrences(
+            of: "\"defaultSize\": [4, 3]", with: "\"defaultSize\": [4, 3], \"configSchema\": [\(fields)]")
+    }
+
+    @Test("a button needs no default, and decodes what it opens and when it shows")
+    func buttonDecodes() throws {
+        let field = try decode(
+            withSchema(
+                """
+                {"key": "edit", "label": "Edit Decks…", "type": "button", "openApp": "com.example.helper",
+                 "showWhen": {"key": "mode", "is": "Deck"}}
+                """)
+        ).widgets[0].configSchema?.first
+        #expect(field?.openApp == "com.example.helper")
+        #expect(field?.showWhen == ConfigCondition(key: "mode", values: ["Deck"]))
+    }
+
+    @Test("any other field still needs a default")
+    func otherFieldsNeedDefaults() {
+        #expect(throws: (any Error).self) {
+            try decode(withSchema(#"{"key": "k", "label": "L", "type": "string"}"#))
+        }
+    }
+
+    @Test("a condition takes one value or a list")
+    func conditionValues() throws {
+        let field = try decode(
+            withSchema(
+                #"{"key": "k", "label": "L", "type": "string", "default": "", "showWhen": {"key": "m", "is": ["A", "B"]}}"#
+            )
+        ).widgets[0].configSchema?.first
+        #expect(field?.showWhen?.values == ["A", "B"])
+    }
+
+    @Test("a button the plugin may not open is dropped from its settings")
+    func forbiddenButtonDropped() throws {
+        let manifest = try decode(
+            withSchema(
+                """
+                {"key": "ok", "label": "Edit", "type": "button", "openApp": "com.example.helper"},
+                {"key": "no", "label": "Terminal", "type": "button", "openApp": "com.apple.Terminal"},
+                {"key": "url", "label": "Help", "type": "button", "openURL": "file:///etc/hosts"}
+                """))
+        let widget = PluginWebWidget(
+            pluginId: manifest.id, widgetDef: manifest.widgets[0], permissions: [],
+            bundlePath: URL(fileURLWithPath: "/tmp/demo.ecplugin"))
+        #expect(widget.configSchema.map(\.key) == ["ok"])
+        #expect(widget.configSchema.first?.opens == .app(bundleId: "com.example.helper"))
+    }
+
+    @Test(
+        "a condition is met by the field's value, or its default while unset",
+        arguments: [
+            (WidgetConfig(["mode": .string("Deck")]), true),
+            (WidgetConfig(["mode": .string("Dock")]), false),
+            (WidgetConfig(), false),
+        ])
+    func conditionMet(config: WidgetConfig, met: Bool) {
+        let schema = [ConfigSchemaEntry(key: "mode", label: "Show", type: .picker, defaultValue: .string("Dock"))]
+        #expect(ConfigCondition(key: "mode", values: ["Deck"]).isMet(by: config, in: schema) == met)
+    }
+
+    @Test("a toggle's condition compares true and false")
+    func conditionOnToggle() {
+        let condition = ConfigCondition(key: "on", values: ["true"])
+        #expect(condition.isMet(by: WidgetConfig(["on": .bool(true)]), in: []))
+        #expect(!condition.isMet(by: WidgetConfig(["on": .bool(false)]), in: []))
+    }
 }

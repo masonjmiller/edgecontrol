@@ -95,9 +95,21 @@ Items from disabled plugins, and items that ask for anything else, don't appear.
 |-------|------|----------|-------------|
 | `key` | String | **Yes** | Config key name |
 | `label` | String | **Yes** | Display label in Settings UI |
-| `type` | String | **Yes** | `"boolean"`, `"number"`, `"string"`, `"color"`, `"select"` |
-| `default` | Any | **Yes** | Default value |
+| `type` | String | **Yes** | `"boolean"`, `"number"`, `"string"`, `"color"`, `"select"`, `"button"` |
+| `default` | Any | **Yes**, except for `"button"` | Default value |
 | `options` | [String] | No | Options for `"select"` type |
+| `openApp`, `openURL` | String | For `"button"` | What the button opens, by the same rules as a [menu item](#menu-items)'s. A button that asks for anything else isn't shown. |
+| `showWhen` | Object | No | Shows the field only while another field has one of some values: `{ "key": "mode", "is": "Deck" }`, or `"is": ["Deck", "Manual"]`. A field that isn't set yet counts as its default. |
+
+A button holds no value. It opens a companion app or a page from the widget's settings, such as an editor for something too fiddly for the dashboard's touch screen:
+
+```json
+{ "key": "editDecks", "label": "Edit Decks…", "type": "button",
+  "openApp": "com.example.my-plugin-helper",
+  "showWhen": { "key": "mode", "is": "Deck" } }
+```
+
+Versions of EdgeControl from before buttons show one as an empty text field, and refuse a manifest whose button has no `default`, so give it `"default": ""` if your plugin must load there too.
 
 ## Permission Identifiers
 
