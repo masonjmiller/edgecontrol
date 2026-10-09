@@ -132,10 +132,7 @@ private struct CameraFullScreenView: View {
             .font(.system(size: 22, weight: .semibold))
             .foregroundStyle(lit ? CameraStyle.readableText(on: accent) : .white)
             .frame(width: 60, height: 60)
-            .background(
-                lit ? accent : Color.black.opacity(0.5),
-                in: RoundedRectangle(cornerRadius: radius, style: .continuous)
-            )
+            .background(lit ? accent : Color.black.opacity(0.5), in: Capsule())
             .touchTappable(id: "camera-full-screen-\(id)", registry: registry, layer: Self.touchLayer) {
                 Task { @MainActor in
                     touched()
@@ -157,7 +154,7 @@ private struct CameraFullScreenView: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 60)
-        .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .background(.black.opacity(0.5), in: Capsule())
         .allowsHitTesting(false)
     }
 

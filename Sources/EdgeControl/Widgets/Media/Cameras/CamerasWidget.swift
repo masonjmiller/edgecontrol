@@ -103,8 +103,8 @@ private struct CamerasWidgetView: View {
     private var listState: CameraService.ListState? { settings.server.flatMap { service.lists[$0] } }
     private var cameras: [CameraSource] { settings.cameras(list: listState) }
     /// Video runs to the card's edges, so it takes the card's corners. Tabs,
-    /// names and the speaker use the same radius; SwiftUI caps it at half
-    /// their height, so a round theme gives pills and a square one squares.
+    /// names and the speaker are pills whatever the theme's radius: they're
+    /// controls floating on the picture, not boxes on the dashboard.
     private var tileRadius: CGFloat { Theme.radius(ts) }
     /// The theme's widget gap, between cameras as between widgets. A hairline
     /// at least, or two cameras at gap 0 read as one picture.
@@ -167,10 +167,7 @@ private struct CamerasWidgetView: View {
                         .foregroundStyle(selected ? onAccent : .white.opacity(0.8))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(
-                            selected ? accent : .black.opacity(0.45),
-                            in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
-                        )
+                        .background(selected ? accent : .black.opacity(0.45), in: Capsule())
                         .touchTappable(id: "cameras-\(instance)-tab-\(camera.id)", registry: touchRegistry) {
                             Task { @MainActor in select(camera.id) }
                         }
@@ -451,7 +448,7 @@ private struct CameraTile: View {
                     .lineLimit(1)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 3)
-                    .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                    .background(.black.opacity(0.45), in: Capsule())
                     .padding(8)
                     // A tap on the name is a tap on the camera.
                     .allowsHitTesting(false)
@@ -502,9 +499,7 @@ private struct CameraTile: View {
             .font(.system(size: 16 * ts.fontScale, weight: .semibold))
             .foregroundStyle(muted ? .white.opacity(0.85) : onAccent)
             .frame(width: 36, height: 36)
-            .background(
-                muted ? Color.black.opacity(0.45) : accent,
-                in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .background(muted ? Color.black.opacity(0.45) : accent, in: Capsule())
     }
 }
 
