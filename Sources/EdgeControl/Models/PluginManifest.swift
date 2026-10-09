@@ -15,6 +15,7 @@ public struct PluginManifest: Codable, Identifiable, Sendable {
     public let icon: String?  // SF Symbol for plugin list (e.g. "bolt.fill")
     public let allowedDomains: [String]?  // Whitelisted domains for network-access permission
     public let desktopWidget: PluginDesktopWidgetConfig?  // macOS desktop widget support
+    public let menuItems: [PluginMenuItem]?  // Added to EdgeControl's menu bar menu
 
     public init(
         id: String, name: String, version: String, author: String,
@@ -23,7 +24,8 @@ public struct PluginManifest: Codable, Identifiable, Sendable {
         widgets: [PluginWidgetDef] = [],
         icon: String? = nil,
         allowedDomains: [String]? = nil,
-        desktopWidget: PluginDesktopWidgetConfig? = nil
+        desktopWidget: PluginDesktopWidgetConfig? = nil,
+        menuItems: [PluginMenuItem]? = nil
     ) {
         self.id = id
         self.name = name
@@ -37,6 +39,54 @@ public struct PluginManifest: Codable, Identifiable, Sendable {
         self.icon = icon
         self.allowedDomains = allowedDomains
         self.desktopWidget = desktopWidget
+        self.menuItems = menuItems
+    }
+}
+
+// MARK: - Menu Items
+
+/// An item a plugin adds to EdgeControl's menu bar menu, for a plugin whose
+/// settings or companion app live outside the dashboard. It opens one of the
+/// plugin's own apps or a web page, nothing else, and only when chosen.
+public struct PluginMenuItem: Codable, Hashable, Sendable {
+    public let title: String
+    /// The bundle identifier of an app to open. It must come from the
+    /// plugin's own developer: its first two parts match the plugin id's
+    /// ("com.example.helper" for "com.example.mywidget").
+    public let openApp: String?
+    /// An http or https page to open.
+    public let openURL: String?
+
+    public init(title: String, openApp: String? = nil, openURL: String? = nil) {
+        self.title = title
+        self.openApp = openApp
+        self.openURL = openURL
+    }
+
+    public enum Target: Equatable, Sendable {
+        case app(bundleId: String)
+        case url(URL)
+    }
+
+    /// What choosing the item opens, or nil when the item asks for
+    /// something a plugin may not open.
+    public func target(forPlugin pluginId: String) -> Target? {
+        let title = title.trimmingCharacters(in: .whitespaces)
+        guard !title.isEmpty, title.count <= 60 else { return nil }
+        if let openApp {
+            let vendor = pluginId.split(separator: ".").prefix(2)
+            let app = openApp.split(separator: ".", omittingEmptySubsequences: false)
+            guard vendor.count == 2, app.count > 2, openApp.count <= 200, Array(app.prefix(2)) == Array(vendor),
+                app.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" } })
+            else { return nil }
+            return .app(bundleId: openApp)
+        }
+        if let openURL, let url = URL(string: openURL), let scheme = url.scheme?.lowercased(),
+            scheme == "https" || scheme == "http", url.host != nil
+        {
+            return .url(url)
+        }
+        return nil
     }
 }
 

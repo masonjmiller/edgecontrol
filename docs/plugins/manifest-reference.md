@@ -54,6 +54,26 @@ Every plugin requires a `manifest.json` in the root of its `.ecplugin` bundle.
 | `permissions` | [String] | No | `[]` | List of permission identifiers |
 | `allowedDomains` | [String] | No | `null` | Whitelisted domains for `network-access` |
 | `widgets` | [Object] | **Yes** | — | Array of widget definitions |
+| `menuItems` | [Object] | No | `null` | Items added to EdgeControl's menu bar menu (below) |
+
+## Menu Items
+
+A plugin whose settings or companion app live outside the dashboard can add items to EdgeControl's menu bar menu, between Settings… and Quit. Each item opens one thing when chosen:
+
+```json
+"menuItems": [
+  { "title": "Edit Decks…", "openApp": "com.example.my-plugin-helper" },
+  { "title": "My Plugin Help", "openURL": "https://example.com/help" }
+]
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | String | The item's title, up to 60 characters |
+| `openApp` | String | Bundle identifier of an app to open. It must be from the plugin's own developer: its first two parts must match the plugin `id`'s (`com.example.…` for `com.example.my-plugin`). If the app is already running it's asked to reopen, which is when an app shows its window. The item is dimmed while the app isn't installed. |
+| `openURL` | String | An `http` or `https` page to open instead |
+
+Items from disabled plugins, and items that ask for anything else, don't appear.
 
 ## Widget Definition Fields
 
