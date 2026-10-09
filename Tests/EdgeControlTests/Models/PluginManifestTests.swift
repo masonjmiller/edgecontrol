@@ -196,4 +196,45 @@ struct PluginManifestTests {
             with: "\"../../../../etc/passwd\"")
         #expect(try decode(json).widgets[0].htmlFile == "../../../../etc/passwd")
     }
+
+    // MARK: menu items
+
+    @Test("menu items decode, and a manifest without them still does")
+    func menuItemsDecode() throws {
+        let m = try decode(
+            wellFormed.replacingOccurrences(
+                of: "\"permissions\"",
+                with: """
+                    "menuItems": [{ "title": "Edit Decks…", "openApp": "com.example.helper" }],
+                      "permissions"
+                    """))
+        #expect(m.menuItems == [PluginMenuItem(title: "Edit Decks…", openApp: "com.example.helper")])
+        #expect(try decode(wellFormed).menuItems == nil)
+    }
+
+    @Test(
+        "an item may open only its own developer's apps, or a web page",
+        arguments: [
+            (PluginMenuItem(title: "Edit", openApp: "com.example.helper"), true),
+            (PluginMenuItem(title: "Edit", openApp: "com.example.tools.editor"), true),
+            (PluginMenuItem(title: "Edit", openApp: "com.apple.Terminal"), false),
+            (PluginMenuItem(title: "Edit", openApp: "com.examples.helper"), false),
+            (PluginMenuItem(title: "Edit", openApp: "com.example"), false),
+            (PluginMenuItem(title: "Edit", openApp: "com.example..x"), false),
+            (PluginMenuItem(title: "Edit", openApp: "com.example.a b"), false),
+            (PluginMenuItem(title: "Docs", openURL: "https://example.com/help"), true),
+            (PluginMenuItem(title: "Docs", openURL: "file:///etc/hosts"), false),
+            (PluginMenuItem(title: "Docs", openURL: "javascript:alert(1)"), false),
+            (PluginMenuItem(title: "   ", openURL: "https://example.com"), false),
+            (PluginMenuItem(title: String(repeating: "x", count: 61), openURL: "https://example.com"), false),
+            (PluginMenuItem(title: "Nothing"), false),
+        ])
+    func menuItemTargets(item: PluginMenuItem, allowed: Bool) {
+        #expect((item.target(forPlugin: "com.example.demo") != nil) == allowed)
+    }
+
+    @Test("a plugin id without a developer prefix can't open apps")
+    func shortPluginId() {
+        #expect(PluginMenuItem(title: "Edit", openApp: "demo.helper.app").target(forPlugin: "demo") == nil)
+    }
 }
