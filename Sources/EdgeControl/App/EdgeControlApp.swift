@@ -406,9 +406,7 @@ final class EdgeControlAppDelegate: NSObject, NSApplicationDelegate {
                 let item = NSMenuItem(title: entry.title, action: #selector(openPluginMenuItem(_:)), keyEquivalent: "")
                 item.target = self
                 item.representedObject = target
-                if case .app(let bundleId) = target,
-                    NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) == nil
-                {
+                if !target.isAvailable {
                     item.isEnabled = false
                     item.toolTip = "\(plugin.manifest.name) needs its app installed for this"
                 }
@@ -418,7 +416,23 @@ final class EdgeControlAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openPluginMenuItem(_ sender: NSMenuItem) {
-        switch sender.representedObject as? PluginMenuItem.Target {
+        (sender.representedObject as? PluginMenuItem.Target)?.open()
+    }
+
+    @objc private func openSettings(_ sender: Any?) {
+        SettingsWindowController.shared.show()
+    }
+}
+
+extension PluginMenuItem.Target {
+    /// False for an app that isn't installed.
+    var isAvailable: Bool {
+        guard case .app(let bundleId) = self else { return true }
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) != nil
+    }
+
+    func open() {
+        switch self {
         case .app(let bundleId):
             guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else { return }
             let configuration = NSWorkspace.OpenConfiguration()
@@ -428,13 +442,7 @@ final class EdgeControlAppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.openApplication(at: url, configuration: configuration, completionHandler: nil)
         case .url(let url):
             NSWorkspace.shared.open(url)
-        case nil:
-            break
         }
-    }
-
-    @objc private func openSettings(_ sender: Any?) {
-        SettingsWindowController.shared.show()
     }
 }
 
