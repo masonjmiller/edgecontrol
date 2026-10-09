@@ -67,6 +67,41 @@ struct WidgetConfigEditor: View {
             PackageListEditor(entry: entry, config: $config, accent: accent)
         case .button:
             buttonRow(entry)
+        case .appDrawerDecks:
+            appDrawerDecksRow(entry)
+        }
+    }
+
+    // MARK: - App Drawer
+
+    /// Opens the deck editor on this tile's deck, with its keys in this
+    /// tile's colors.
+    private func appDrawerDecksRow(_ entry: ConfigSchemaEntry) -> some View {
+        HStack {
+            Text(entry.label)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Button {
+                let theme = layoutEngine.document.globalSettings.theme
+                let settings = DrawerSettings(config)
+                let palette = KeyPalette(
+                    accent: theme.widgetColorOverrides["app-drawer"]?.primary.color ?? Theme.accent(theme),
+                    fullAccent: settings.fullAccent, whiteIcons: settings.whiteIcons)
+                DeckEditorWindowController.shared.show(
+                    service: model.appDrawerService, deckId: settings.deckId, palette: palette)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.3x3.fill")
+                    Text("Edit Decks…")
+                }
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(accent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
         }
     }
 

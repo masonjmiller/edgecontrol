@@ -27,6 +27,7 @@ public final class AppModel: ObservableObject {
     public let printerService = PrinterService()
     public let bambuService = BambuService()
     public let parcelService = ParcelService()
+    public let appDrawerService = AppDrawerService()
     public let accountStore = CIAccountStore()
     public let noteStore = NoteStore()
     /// Held so the global key stays registered for the app's lifetime, and so
@@ -144,6 +145,7 @@ public final class AppModel: ObservableObject {
         case .printers: return printerService
         case .bambu: return bambuService
         case .parcel: return parcelService
+        case .appDrawer: return appDrawerService
         }
     }
 

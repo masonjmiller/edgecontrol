@@ -376,6 +376,9 @@ public enum ConfigFieldType: String, Codable, Hashable, Sendable {
     /// A button that opens something rather than holding a value: for a
     /// plugin, one of its own apps or a web page (`opens`).
     case button
+    /// App Drawer's decks: a button that opens the deck editor. It stores
+    /// nothing; decks live in their own file.
+    case appDrawerDecks
 }
 
 // MARK: - Service Key
@@ -399,6 +402,7 @@ public enum ServiceKey: String, CaseIterable, Hashable, Sendable {
     case printers  // PrinterService (IPP, found over Bonjour)
     case bambu  // BambuService (MQTT to Bambu Lab printers)
     case parcel  // ParcelService (Parcel Premium API)
+    case appDrawer  // AppDrawerService: apps, the Dock, decks, keys
 }
 
 // MARK: - Dashboard Widget Protocol
@@ -468,7 +472,7 @@ public enum WidgetLaunch {
         name.contains("Activity Monitor")
     }
     /// Widgets whose taps already do something keep their behavior.
-    public static let excluded: Set<String> = ["cicd-runs", "cameras", "parcel", "packages"]
+    public static let excluded: Set<String> = ["cicd-runs", "cameras", "parcel", "packages", "app-drawer"]
 
     public static func defaultApp(for widgetId: String) -> String {
         switch widgetId {
