@@ -432,20 +432,23 @@ extension View {
     }
 }
 
+/// Worked out from the clock, not a repeating animation: SwiftUI adds a new
+/// animation to one that repeats forever rather than replacing it, so that
+/// kind never stops.
 private struct Bounce: ViewModifier {
     let active: Bool
     let height: CGFloat
-    @State private var up = false
+    @State private var since: Date?
+
+    /// Up and down again, slowing at the top as a ball does.
+    static let period: TimeInterval = 0.76
 
     func body(content: Content) -> some View {
-        content
-            .offset(y: active && up ? -height : 0)
-            .onChange(of: active, initial: true) { _, isActive in
-                if isActive {
-                    withAnimation(.easeInOut(duration: 0.38).repeatForever(autoreverses: true)) { up = true }
-                } else {
-                    withAnimation(.easeOut(duration: 0.2)) { up = false }
-                }
-            }
+        TimelineView(.animation(paused: since == nil)) { context in
+            let elapsed = since.map { context.date.timeIntervalSince($0) } ?? 0
+            content.offset(y: -height * abs(sin(elapsed / Self.period * .pi)))
+        }
+        .animation(.easeOut(duration: 0.2), value: since == nil)
+        .onChange(of: active, initial: true) { _, isActive in since = isActive ? .now : nil }
     }
 }

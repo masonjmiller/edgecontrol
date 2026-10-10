@@ -145,7 +145,6 @@ public final class AppDrawerService: ObservableObject {
         usage.open(app?.bundleIdentifier, at: Self.now)
         runner.noteFront(app)
         refreshRunning()
-        if let id = app?.bundleIdentifier { launching.remove(id) }
         rank()
     }
 
@@ -256,21 +255,22 @@ public final class AppDrawerService: ObservableObject {
 
     // MARK: - Running keys
 
-    /// Opens an app from a tile: it bounces until it's in front.
+    /// Opens an app from a tile: it bounces until the app has opened.
     public func open(_ bundleId: String) {
+        let tapped = ContinuousClock.now
         launching.insert(bundleId)
         Task {
             if let failure = await runner.launch(bundleId) {
                 self.flag("app:" + bundleId, failure)
             }
-            try? await Task.sleep(for: .seconds(8))
-            self.launching.remove(bundleId)
+            await self.stopBouncing(bundleId, tapped: tapped)
         }
     }
 
     /// Runs a key, or what holding it does.
     public func run(_ key: DeckKey, held: Bool = false) {
         guard let action = held ? key.hold : key.action, action.kind != .folder else { return }
+        let tapped = ContinuousClock.now
         if action.kind == .app, let id = action.bundleId { launching.insert(id) }
         fired.insert(key.id)
         Task {
@@ -279,11 +279,23 @@ public final class AppDrawerService: ObservableObject {
         }
         Task {
             if let failure = await runner.run(action) { self.flag(key.id, failure) }
-            if action.kind == .app, let id = action.bundleId {
-                try? await Task.sleep(for: .seconds(8))
-                self.launching.remove(id)
-            }
+            if action.kind == .app, let id = action.bundleId { await self.stopBouncing(id, tapped: tapped) }
         }
+    }
+
+    /// Once the app is open, after one bounce at least so a tap on an app
+    /// that's already open still shows. An app that's slow to start keeps
+    /// bouncing till it has, as in the Dock, for up to 8 seconds.
+    private func stopBouncing(_ bundleId: String, tapped: ContinuousClock.Instant) async {
+        try? await Task.sleep(until: tapped + .milliseconds(760), clock: .continuous)
+        while tapped.duration(to: .now) < .seconds(8),
+            NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).contains(where: {
+                !$0.isFinishedLaunching
+            })
+        {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        launching.remove(bundleId)
     }
 
     private func flag(_ id: String, _ message: String) {
