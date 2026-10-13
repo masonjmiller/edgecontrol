@@ -149,9 +149,13 @@ struct GuideView: View {
                         rows: [
                             (
                                 "go2rtc Server",
-                                "Every camera on the server appears. RTSP, ONVIF and other cameras go into go2rtc; Frigate and Home Assistant include it."
+                                "Every camera on the server appears. RTSP, ONVIF, Ring and other cameras go into go2rtc; Frigate and Home Assistant include it."
                             ),
                             ("Tabs", "With Show set to Single, tap a camera's name to switch to it."),
+                            (
+                                "Switch Every",
+                                "The next camera connects a few seconds before its turn, and the widget moves on once it's playing."
+                            ),
                             ("Grid", "Tap a camera to fill the widget with it; tap again to go back."),
                             (
                                 "Speaker",

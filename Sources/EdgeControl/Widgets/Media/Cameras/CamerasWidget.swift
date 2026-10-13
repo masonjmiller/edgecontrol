@@ -26,7 +26,9 @@ public final class CamerasWidget: DashboardWidget {
         ConfigSchemaEntry(
             key: "cycleSeconds", label: "Switch Every (Seconds)", type: .stepper, defaultValue: .int(0),
             minValue: 0, maxValue: 300, step: 5,
-            help: "Single only. 0 stays on the camera you picked; a tap pauses switching for 30 seconds."),
+            help:
+                "Single only. 0 stays on the camera you picked; a tap pauses switching for 30 seconds. The next camera connects early, so the switch lands on a playing picture."
+        ),
         ConfigSchemaEntry(
             key: "fill", label: "Fill the Tile", type: .toggle, defaultValue: .bool(true),
             help: "On crops cameras to fill the widget, grid cells included. Off shows each whole picture."),
@@ -80,6 +82,30 @@ struct CamerasSettings: Equatable {
     }
 }
 
+/// Automatic switching. A camera takes seconds to start (a Ring live view
+/// has to be set up through Ring's servers, and go2rtc's HLS adds a couple
+/// more), so the next camera starts early and the switch waits for it to play.
+enum CameraCycle {
+    /// The next camera starts this long before its turn.
+    static let lead: TimeInterval = 8
+    /// How long past its turn the switch waits for a camera that won't play,
+    /// before moving on to show what's wrong with it.
+    static let patience: TimeInterval = 12
+
+    enum Step: Equatable {
+        case wait
+        case startNext
+        case switchToNext
+    }
+
+    static func step(sinceSwitch: TimeInterval, every seconds: Int, nextPlaying: Bool) -> Step {
+        let due = TimeInterval(seconds)
+        if sinceSwitch < due - lead { return .wait }
+        if sinceSwitch >= due && (nextPlaying || sinceSwitch >= due + patience) { return .switchToNext }
+        return .startNext
+    }
+}
+
 private struct CamerasWidgetView: View {
     @ObservedObject var service: CameraService
     let settings: CamerasSettings
@@ -96,6 +122,8 @@ private struct CamerasWidgetView: View {
     @State private var offScreenTask: Task<Void, Never>?
     @State private var lastTouch = Date.distantPast
     @State private var lastSwitch = Date()
+    /// The next camera's stream, held open before its turn.
+    @State private var upNext: LiveStreamPlayer?
 
     private var touchRegistry: TouchZoneRegistry { model.touchService.zoneRegistry }
     private var accent: Color { Theme.widgetPrimaryOrAccent("cameras", ts: ts) }
@@ -190,18 +218,46 @@ private struct CamerasWidgetView: View {
         let seconds = settings.cycleSeconds
         guard seconds > 0, !settings.grid else { return }
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: .milliseconds(500))
             let cameras = self.cameras
-            guard onScreen, cameras.count > 1,
-                Date().timeIntervalSince(lastSwitch) >= Double(seconds),
-                Date().timeIntervalSince(lastTouch) >= 30
-            else { continue }
+            guard tilesActive, cameras.count > 1, Date().timeIntervalSince(lastTouch) >= 30 else {
+                hold(nil)
+                continue
+            }
             let at = cameras.firstIndex { $0.id == currentId } ?? 0
-            currentId = cameras[(at + 1) % cameras.count].id
-            soundId = nil
-            lastSwitch = Date()
+            let next = cameras[(at + 1) % cameras.count]
+            let nextURL = playbackURL(next)
+            let step = CameraCycle.step(
+                sinceSwitch: Date().timeIntervalSince(lastSwitch), every: seconds,
+                nextPlaying: upNext != nil && upNext?.url == nextURL && upNext?.state == .playing)
+            switch step {
+            case .wait:
+                hold(nil)
+            case .startNext:
+                hold(nextURL.map(service.player(for:)))
+            case .switchToNext:
+                // The stream stays held until the next pass, by which time
+                // the camera's tile has it, so it plays straight on.
+                currentId = next.id
+                soundId = nil
+                lastSwitch = Date()
+            }
         }
+        hold(nil)
     }
+
+    /// Keeps a stream playing for the camera that's next, letting go of the
+    /// one held before.
+    private func hold(_ player: LiveStreamPlayer?) {
+        guard player !== upNext else { return }
+        let holder = "\(instance)-next"
+        if let held = upNext { service.release(held, holder: holder) }
+        upNext = player
+        if let player { service.setActive(true, player, holder: holder) }
+    }
+
+    /// Hidden under a camera open full screen, the tiles rest.
+    private var tilesActive: Bool { onScreen && service.screensAwake && service.fullScreen == nil }
 
     // MARK: - Grid
 
@@ -260,8 +316,7 @@ private struct CamerasWidgetView: View {
             CameraTile(
                 service: service, stream: service.player(for: url), holder: "\(instance)-\(camera.id)",
                 name: camera.name,
-                // Hidden under a camera open full screen, the tiles rest.
-                active: onScreen && service.screensAwake && service.fullScreen == nil,
+                active: tilesActive,
                 muted: soundId != camera.id, fill: settings.fill,
                 showName: showName, showSound: showSound, radius: tileRadius, accent: accent, onAccent: onAccent,
                 registry: touchRegistry, soundZoneId: "cameras-\(instance)-sound-\(camera.id)",
