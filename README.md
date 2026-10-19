@@ -16,19 +16,19 @@ Built from scratch in Swift & SwiftUI — no third-party dependencies. Works on 
 
 I got the XENEON EDGE because I loved the idea of a dedicated touchscreen dashboard on my desk. But on macOS, there's no software for it — it just shows up as another monitor. So I built my own.
 
-What started as a basic system monitor for one specific display has grown into a universal dashboard platform that adapts to any screen. 33 widgets, dynamic grid layout, macOS desktop widgets, complete theme customization, and a plugin system. Contributors then pushed it past a thing to glance at: it has a real note editor now, a key that captures a line from any app, and a door to Apple Reminders. It's something I use every single day, and it keeps getting better.
+What started as a basic system monitor for one specific display has grown into a universal dashboard platform that adapts to any screen. 34 widgets, dynamic grid layout, macOS desktop widgets, complete theme customization, and a plugin system. Contributors then pushed it past a thing to glance at: it has a real note editor now, a key that captures a line from any app, and a door to Apple Reminders. It's something I use every single day, and it keeps getting better.
 
 ## What It Does
 
 EdgeControl turns any display into a fully customizable system dashboard. You create pages, place widgets wherever you want on a dynamic grid that automatically adapts to your screen, resize them, and configure everything from colors to fonts. Run it full-screen on a secondary display or as a resizable window on your main monitor. And when you need to write something down, the notes are right there rather than in another app.
 
-### 33 Built-in Widgets
+### 34 Built-in Widgets
 
-**System (10)** — CPU Gauge, Memory Gauge, CPU History, Memory History, Process List, Disk I/O, Storage Bars, Memory Pressure, CPU Cores (per-core usage), App Drawer (your Dock, or a deck of keys — see below)
+**System (11)** — CPU Gauge, Memory Gauge, CPU History, Memory History, Process List, Disk I/O, Storage Bars, Memory Pressure, CPU Cores (per-core usage), Batteries (this Mac, AirPods and Magic accessories, like the macOS widget), App Drawer (your Dock, or a deck of keys — see below)
 
 **Temperature (5)** — CPU Temp, GPU Temp, SSD Temp, Temperature History, Per-Core Temp (P-core/E-core breakdown)
 
-**Network (5)** — Network Stats (up/down speeds), WiFi Info (SSID, signal, channel), Bluetooth Devices, Printers (state, problems and ink levels of the printers on your network), Bambu Lab Printer (print progress, temperatures, AMS spools, and the P1/A1 camera or the model filling in as it prints, over the local network)
+**Network (5)** — Network Stats (up/down speeds), WiFi Info (SSID, signal, channel), Bluetooth Devices (with battery levels), Printers (state, problems and ink levels of the printers on your network), Bambu Lab Printer (print progress, temperatures, AMS spools, and the P1/A1 camera or the model filling in as it prints, over the local network)
 
 **Media (3)** — Now Playing (Safari, Chrome, Edge, Spotify, Apple Music — controls, artwork, progress), Audio Devices (output, volume), Cameras (live go2rtc and HLS cameras — one at a time with tabs, or a grid)
 

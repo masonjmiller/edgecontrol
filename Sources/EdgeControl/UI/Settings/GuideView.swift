@@ -231,6 +231,15 @@ struct GuideView: View {
                             ),
                         ])
                     section(
+                        "Batteries",
+                        rows: [
+                            (
+                                "Devices",
+                                "This Mac, AirPods while they're connected, and Magic Keyboards, Mice and Trackpads. macOS doesn't let apps read iPhone, iPad or Apple Watch levels."
+                            ),
+                            ("Colors", "Red at 20% or less, yellow in Low Power Mode. A bolt means it's charging."),
+                        ])
+                    section(
                         "Widget Catalog",
                         rows: [
                             (
