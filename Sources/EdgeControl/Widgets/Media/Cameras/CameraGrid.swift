@@ -8,6 +8,17 @@ import CoreGraphics
 /// edges, a short last row widens to use the whole row, and each camera is
 /// cropped to its cell.
 enum CameraGrid {
+    /// At least half the widget across is on the dashboard. `dashboard` is
+    /// the dashboard's bounds in the widget's own coordinates, which is what
+    /// `GeometryProxy.bounds(of:)` returns. Comparing that with the widget's
+    /// frame in the dashboard's coordinates, as this once did, counted every
+    /// widget right of about the middle as off screen, and its cameras
+    /// stopped. Outside a dashboard (nil), it's on screen.
+    static func isOnScreen(size: CGSize, dashboard: CGRect?) -> Bool {
+        guard let dashboard, size.width > 0 else { return true }
+        return CGRect(origin: .zero, size: size).intersection(dashboard).width >= size.width / 2
+    }
+
     struct Arrangement: Equatable {
         let columns: Int
         let rows: Int

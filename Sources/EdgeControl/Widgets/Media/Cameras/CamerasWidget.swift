@@ -410,19 +410,19 @@ private struct CamerasWidgetView: View {
     /// every stream).
     private var onScreenTracker: some View {
         GeometryReader { geo in
+            // The frame only says when to look again; whether it's on screen
+            // is worked out in the widget's own coordinates.
             let frame = geo.frame(in: .named(TouchCoordinate.name))
-            let bounds = geo.bounds(of: .named(TouchCoordinate.name))
+            let dashboard = geo.bounds(of: .named(TouchCoordinate.name))
+            let size = geo.size
             Color.clear
-                .onAppear { updateOnScreen(frame: frame, bounds: bounds) }
-                .onChange(of: frame) { _, newFrame in updateOnScreen(frame: newFrame, bounds: bounds) }
+                .onAppear { updateOnScreen(size: size, dashboard: dashboard) }
+                .onChange(of: frame) { _, _ in updateOnScreen(size: size, dashboard: dashboard) }
         }
     }
 
-    private func updateOnScreen(frame: CGRect, bounds: CGRect?) {
-        let visible: Bool = {
-            guard let bounds, frame.width > 0 else { return true }
-            return frame.intersection(bounds).width >= frame.width / 2
-        }()
+    private func updateOnScreen(size: CGSize, dashboard: CGRect?) {
+        let visible = CameraGrid.isOnScreen(size: size, dashboard: dashboard)
         offScreenTask?.cancel()
         if visible {
             if !onScreen { onScreen = true }

@@ -96,3 +96,33 @@ struct LiveEdgeTests {
         #expect((1...7).map(LiveEdge.retryDelay(afterFailures:)) == [1, 2, 4, 8, 16, 30, 30])
     }
 }
+
+@Suite("Cameras: on screen or not")
+struct CameraOnScreenTests {
+    /// A 2560×720 dashboard's bounds as a widget at `x` sees them, which is
+    /// how `GeometryProxy.bounds(of:)` gives them.
+    private func dashboard(seenFrom x: CGFloat) -> CGRect {
+        CGRect(x: -x, y: -120, width: 2560, height: 720)
+    }
+
+    private let tile = CGSize(width: 640, height: 360)
+
+    @Test("a widget anywhere on the dashboard is on screen, the right half included")
+    func onTheDashboard() {
+        #expect(CameraGrid.isOnScreen(size: tile, dashboard: dashboard(seenFrom: 0)))
+        #expect(CameraGrid.isOnScreen(size: tile, dashboard: dashboard(seenFrom: 1536)))
+        #expect(CameraGrid.isOnScreen(size: tile, dashboard: dashboard(seenFrom: 1920)))
+    }
+
+    @Test("one on the next page, or mostly past the edge mid-swipe, isn't")
+    func offTheDashboard() {
+        #expect(!CameraGrid.isOnScreen(size: tile, dashboard: dashboard(seenFrom: 2560 + 100)))
+        #expect(!CameraGrid.isOnScreen(size: tile, dashboard: dashboard(seenFrom: 2560 - 200)))
+        #expect(!CameraGrid.isOnScreen(size: tile, dashboard: dashboard(seenFrom: -500)))
+    }
+
+    @Test("outside a dashboard, as in the catalog's preview, it's on screen")
+    func noDashboard() {
+        #expect(CameraGrid.isOnScreen(size: tile, dashboard: nil))
+    }
+}
