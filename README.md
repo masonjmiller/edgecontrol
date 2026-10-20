@@ -1,1 +1,1 @@
-Screenshots for the kemalandic/edgecontrol pull requests #22 (Cameras), #23 (Bambu Lab Printer), #24 (Printers), the Parcel widget and App Drawer. Not part of any PR; the PR descriptions link these files by commit.
+Screenshots for the kemalandic/edgecontrol pull requests #22 (Cameras), #23 (Bambu Lab Printer), #24 (Printers), #27 (Parcel), #29 (App Drawer) and the Batteries widget. Not part of any PR; the PR descriptions link these files by commit.
