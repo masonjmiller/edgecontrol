@@ -46,6 +46,20 @@ public final class BambuPrinterWidget: DashboardWidget {
     }
 }
 
+/// Whether the widget is on the dashboard, for streaming its camera.
+enum BambuVisibility {
+    /// At least half the widget across is on the dashboard. `dashboard` is
+    /// the dashboard's bounds in the widget's own coordinates, which is what
+    /// `GeometryProxy.bounds(of:)` returns. Comparing that with the widget's
+    /// frame in the dashboard's coordinates, as this once did, counted every
+    /// widget right of about the middle as off screen. Outside a dashboard
+    /// (nil), it's on screen.
+    static func isOnScreen(size: CGSize, dashboard: CGRect?) -> Bool {
+        guard let dashboard, size.width > 0 else { return true }
+        return CGRect(origin: .zero, size: size).intersection(dashboard).width >= size.width / 2
+    }
+}
+
 enum BambuPicture: String, CaseIterable {
     case camera, model, none
 }
@@ -453,19 +467,19 @@ private struct BambuPrinterView: View {
     /// camera streams only while at least half the widget is on the dashboard.
     private var onScreenTracker: some View {
         GeometryReader { geo in
+            // The frame only says when to look again; whether it's on screen
+            // is worked out in the widget's own coordinates.
             let frame = geo.frame(in: .named(TouchCoordinate.name))
-            let bounds = geo.bounds(of: .named(TouchCoordinate.name))
+            let dashboard = geo.bounds(of: .named(TouchCoordinate.name))
+            let size = geo.size
             Color.clear
-                .onAppear { updateOnScreen(frame: frame, bounds: bounds) }
-                .onChange(of: frame) { _, newFrame in updateOnScreen(frame: newFrame, bounds: bounds) }
+                .onAppear { updateOnScreen(size: size, dashboard: dashboard) }
+                .onChange(of: frame) { _, _ in updateOnScreen(size: size, dashboard: dashboard) }
         }
     }
 
-    private func updateOnScreen(frame: CGRect, bounds: CGRect?) {
-        let visible: Bool = {
-            guard let bounds, frame.width > 0 else { return true }
-            return frame.intersection(bounds).width >= frame.width / 2
-        }()
+    private func updateOnScreen(size: CGSize, dashboard: CGRect?) {
+        let visible = BambuVisibility.isOnScreen(size: size, dashboard: dashboard)
         offScreenTask?.cancel()
         if visible {
             if !onScreen { onScreen = true }

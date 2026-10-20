@@ -154,3 +154,20 @@ struct BambuJSONTests {
         #expect(merged["hms"]?.array?.isEmpty == true)
     }
 }
+
+@Suite("Bambu Lab Printer: on screen or not")
+struct BambuVisibilityTests {
+    private let tile = CGSize(width: 640, height: 360)
+
+    @Test("on the right half of the dashboard, the camera still streams")
+    func rightHalf() {
+        // A 2560-wide dashboard as a widget at x = 1536 sees it.
+        #expect(BambuVisibility.isOnScreen(size: tile, dashboard: CGRect(x: -1536, y: -120, width: 2560, height: 720)))
+    }
+
+    @Test("on the next page, or with no dashboard around it")
+    func elsewhere() {
+        #expect(!BambuVisibility.isOnScreen(size: tile, dashboard: CGRect(x: -2660, y: -120, width: 2560, height: 720)))
+        #expect(BambuVisibility.isOnScreen(size: tile, dashboard: nil))
+    }
+}
