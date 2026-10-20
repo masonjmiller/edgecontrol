@@ -127,20 +127,34 @@ final class DeckEditorModel: ObservableObject {
         if selection == id { selection = nil }
     }
 
-    /// Drag and drop: puts `id` where `target` is, and the deck in the
-    /// order its keys were placed.
-    func move(_ id: String, before target: String) {
-        guard id != target else { return }
+    /// Drag and drop: puts `id` just before or after `target`, as the keys
+    /// are shown. A deck sorted another way keeps the order it was showing,
+    /// with this one change, and is sorted by hand from then on.
+    func move(_ id: String, to target: String, after: Bool) {
+        guard let order = Self.reordered(shown.map(\.id), moving: id, to: target, after: after) else { return }
+        let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
         let path = path
         edit { deck in
             deck.keys.editLevel(path) { keys in
-                guard let from = keys.firstIndex(where: { $0.id == id }) else { return }
-                let item = keys.remove(at: from)
-                let to = keys.firstIndex(where: { $0.id == target }) ?? keys.count
-                keys.insert(item, at: to)
+                keys.sort { (rank[$0.id] ?? .max) < (rank[$1.id] ?? .max) }
             }
             deck.order = .manual
         }
+    }
+
+    /// The ids with `id` taken out and put back beside `target`; nil when
+    /// that changes nothing or either isn't there.
+    nonisolated static func reordered(
+        _ ids: [String], moving id: String, to target: String, after: Bool
+    )
+        -> [String]?
+    {
+        guard id != target, let from = ids.firstIndex(of: id) else { return nil }
+        var order = ids
+        order.remove(at: from)
+        guard let at = order.firstIndex(of: target) else { return nil }
+        order.insert(id, at: after ? at + 1 : at)
+        return order == ids ? nil : order
     }
 
     func newDeck(named name: String) {
@@ -416,10 +430,18 @@ func chooseFile() -> URL? {
 
 struct DeckKeyGrid: View {
     @ObservedObject var model: DeckEditorModel
+    /// Where a dragged key would land, shown as a bar in the gap.
+    @State private var spot: DeckDropSpot?
+    /// The key being dragged, so a spot that wouldn't move it shows no bar.
+    @State private var dragging: String?
+
+    /// Each key's cell reaches halfway across the gaps around it, so a drag
+    /// always has a key under it and the bar doesn't flicker between keys.
+    private static let gap: CGFloat = 14
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 112), spacing: 14)], spacing: 14) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 106 + Self.gap, maximum: 126), spacing: 0)], spacing: 0) {
                 if !model.path.isEmpty {
                     face(
                         DrawerTile(
@@ -431,6 +453,7 @@ struct DeckKeyGrid: View {
                         model.selection = nil
                     }
                 }
+                let order = model.shown.map(\.id)
                 ForEach(model.shown) { key in
                     face(model.tile(key), selected: model.selection == key.id)
                         .onTapGesture(count: 2) {
@@ -440,18 +463,38 @@ struct DeckKeyGrid: View {
                             }
                         }
                         .onTapGesture { model.selection = key.id }
-                        .draggable(key.id)
-                        .dropDestination(for: String.self) { ids, _ in
-                            guard let moved = ids.first else { return false }
-                            model.move(moved, before: key.id)
-                            return true
+                        .overlay(alignment: spot?.after == true ? .trailing : .leading) {
+                            if spot?.id == key.id { insertionBar }
                         }
+                        // The key itself under the pointer, and a move, not
+                        // the copy badge a plain drop destination shows.
+                        .onDrag {
+                            dragging = key.id
+                            return NSItemProvider(object: key.id as NSString)
+                        } preview: {
+                            DrawerKey(
+                                tile: model.tile(key), side: 84, palette: model.palette,
+                                labelFont: .system(size: 10, weight: .bold), images: model.service.images)
+                        }
+                        .onDrop(
+                            of: [.plainText],
+                            delegate: DeckKeyDrop(
+                                target: key.id, order: order, dragging: dragging, spot: $spot, model: model))
                 }
             }
-            .padding(18)
+            .animation(.easeOut(duration: 0.12), value: spot)
+            .padding(18 - Self.gap / 2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .underPageBackgroundColor))
+    }
+
+    private var insertionBar: some View {
+        Capsule()
+            .fill(Color.accentColor)
+            .frame(width: 4, height: 92)
+            .offset(x: spot?.after == true ? 2 : -2, y: -10)
+            .allowsHitTesting(false)
     }
 
     private func face(_ tile: DrawerTile, selected: Bool) -> some View {
@@ -465,6 +508,51 @@ struct DeckKeyGrid: View {
         .background(
             RoundedRectangle(cornerRadius: 14).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 2)
         )
+        .padding(Self.gap / 2)
         .contentShape(Rectangle())
+    }
+}
+
+/// Where a dragged key would land: just before or after another.
+struct DeckDropSpot: Equatable {
+    var id: String
+    var after: Bool
+}
+
+/// Shows where a dragged key will go while it's over another, and puts it
+/// there when it's let go.
+private struct DeckKeyDrop: DropDelegate {
+    let target: String
+    let order: [String]
+    let dragging: String?
+    @Binding var spot: DeckDropSpot?
+    let model: DeckEditorModel
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        // The left half of a key puts it before; the right half, after.
+        let after = info.location.x > (106 + 14) / 2
+        let moves =
+            dragging.map {
+                DeckEditorModel.reordered(order, moving: $0, to: target, after: after) != nil
+            } ?? true
+        let next = moves ? DeckDropSpot(id: target, after: after) : nil
+        if spot != next { spot = next }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if spot?.id == target { spot = nil }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let after = spot?.after ?? false
+        spot = nil
+        guard let provider = info.itemProviders(for: [.plainText]).first else { return false }
+        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+            // Text dragged in from another app isn't a key, and moves nothing.
+            guard let moved = object as? String else { return }
+            Task { @MainActor in model.move(moved, to: target, after: after) }
+        }
+        return true
     }
 }

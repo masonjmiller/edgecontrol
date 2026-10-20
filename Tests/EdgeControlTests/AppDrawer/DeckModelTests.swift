@@ -155,6 +155,24 @@ struct DeckModelTests {
             ])
     }
 
+    @Test("dragging a key puts it just before or after the one it's dropped on")
+    func dragging() {
+        let ids = ["a", "b", "c", "d"]
+        #expect(DeckEditorModel.reordered(ids, moving: "a", to: "c", after: false) == ["b", "a", "c", "d"])
+        #expect(DeckEditorModel.reordered(ids, moving: "a", to: "c", after: true) == ["b", "c", "a", "d"])
+        #expect(DeckEditorModel.reordered(ids, moving: "d", to: "a", after: false) == ["d", "a", "b", "c"])
+        #expect(DeckEditorModel.reordered(ids, moving: "b", to: "d", after: true) == ["a", "c", "d", "b"])
+    }
+
+    @Test("a drop that wouldn't move anything, or of something that isn't a key here, does nothing")
+    func draggingNowhere() {
+        let ids = ["a", "b", "c"]
+        #expect(DeckEditorModel.reordered(ids, moving: "b", to: "b", after: true) == nil)
+        #expect(DeckEditorModel.reordered(ids, moving: "b", to: "c", after: false) == nil)
+        #expect(DeckEditorModel.reordered(ids, moving: "b", to: "a", after: true) == nil)
+        #expect(DeckEditorModel.reordered(ids, moving: "some text", to: "a", after: false) == nil)
+    }
+
     @Test("a level inside folders can be read and changed, and keys found and removed at any depth")
     func levels() {
         var keys = [DeckKey(id: "a", action: .folder([DeckKey(id: "b", action: .folder())]))]
