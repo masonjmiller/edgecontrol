@@ -145,6 +145,22 @@ struct GuideView: View {
                             ("Circle", "Tap to complete the reminder everywhere."),
                         ])
                     section(
+                        "YouTube",
+                        rows: [
+                            (
+                                "Signing in",
+                                "Sign in once on youtube.com in the tile, with the mouse and keyboard; it stays signed in. Other links open in your browser."
+                            ),
+                            (
+                                "Watching",
+                                "A video fills the tile. Tap to pause or play; the controls fade while it plays. Browse shows the page around it."
+                            ),
+                            (
+                                "Search",
+                                "Tap the search bar for an on-tile keyboard, since typing goes to the app in front."
+                            ),
+                        ])
+                    section(
                         "Widget Catalog",
                         rows: [
                             (
